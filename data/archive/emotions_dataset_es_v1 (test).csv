@@ -1,0 +1,41 @@
+texto,activacion,valencia,cuadrante
+"tengo ganas de saltar y gritar de alegría",alta,positiva,alta_positiva
+"estoy saltando de alegría y no puedo parar de sonreír",alta,positiva,alta_positiva
+"tengo muchísima energía y quiero comerme el mundo",alta,positiva,alta_positiva
+"me siento eufórico y con el corazón latiendo a mil de emoción",alta,positiva,alta_positiva
+"estoy súper motivado para empezar a trabajar hoy mismo",alta,positiva,alta_positiva
+"qué increíble noticia siento que voy a explotar de felicidad",alta,positiva,alta_positiva
+"tengo unas ganas inmensas de celebrar y salir corriendo",alta,positiva,alta_positiva
+"estoy eufórico y siento electricidad en las manos",alta,positiva,alta_positiva
+"mi mente va a mil por hora de pura inspiración",alta,positiva,alta_positiva
+"estoy radiante y quiero abrazar a todo el mundo",alta,positiva,alta_positiva
+"siento un nudo en el pecho y no puedo dejar de mover la pierna",alta,negativa,alta_negativa
+"tengo la mandíbula tensa y ganas de romper algo",alta,negativa,alta_negativa
+"siento que me asfixio y mi corazón palpita de puro pánico",alta,negativa,alta_negativa
+"estoy sudando frío y no puedo dejar de temblar",alta,negativa,alta_negativa
+"siento un nudo en la garganta y la respiración cortada del estrés",alta,negativa,alta_negativa
+"tengo los hombros súper tensos y me hierve la sangre",alta,negativa,alta_negativa
+"estoy muy alterado y no soporto que me hablen",alta,negativa,alta_negativa
+"mi cabeza es un torbellino de pensamientos catastróficos",alta,negativa,alta_negativa
+"tengo una presión horrible en el pecho por la ansiedad",alta,negativa,alta_negativa
+"estoy hiperventilando y me siento acorralado",alta,negativa,alta_negativa
+"estoy respirando profundo y mis músculos están sueltos",baja,positiva,baja_positiva
+"estoy respirando profundo y sintiendo el sol en la cara",baja,positiva,baja_positiva
+"me siento muy en paz y con la mente completamente en blanco",baja,positiva,baja_positiva
+"mis músculos están relajados y disfruto este momento de calma",baja,positiva,baja_positiva
+"estoy acurrucado en el sofá sintiendo mucha tranquilidad",baja,positiva,baja_positiva
+"siento una serenidad total y ninguna preocupación",baja,positiva,baja_positiva
+"todo fluye suavemente y no tengo prisa por nada",baja,positiva,baja_positiva
+"estoy descansando plácidamente escuchando el silencio",baja,positiva,baja_positiva
+"me siento equilibrado y con una ligera sonrisa",baja,positiva,baja_positiva
+"estoy en un estado de quietud absoluta y muy a gusto",baja,positiva,baja_positiva
+"siento el cuerpo pesado y no tengo ganas de salir de la cama",baja,negativa,baja_negativa
+"no tengo energía ni para levantar un brazo",baja,negativa,baja_negativa
+"siento un vacío enorme en el pecho y me pesan los ojos",baja,negativa,baja_negativa
+"todo me da igual y no tengo motivación para moverme",baja,negativa,baja_negativa
+"estoy arrastrando los pies y me siento derrotado",baja,negativa,baja_negativa
+"tengo ganas de llorar pero ni siquiera tengo fuerzas para eso",baja,negativa,baja_negativa
+"siento una pesadez gris en todo el cuerpo",baja,negativa,baja_negativa
+"me siento completamente apagado y sin chispa",baja,negativa,baja_negativa
+"estoy hundido en la cama sin ganas de ver a nadie",baja,negativa,baja_negativa
+"siento una apatía tremenda y un cansancio emocional profundo",baja,negativa,baja_negativa
