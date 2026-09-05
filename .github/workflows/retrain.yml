@@ -37,6 +37,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pytest httpx
 
       - name: Check Turso credentials
         id: check_creds
@@ -65,7 +66,7 @@ jobs:
 
       - name: Run verification test suite
         run: |
-          pytest tests/ -v
+          python -m pytest tests/ -v
 
       - name: Commit and push updated models if changed
         if: steps.check_creds.outputs.has_creds == 'true' && inputs.dry_run != true
