@@ -9,7 +9,10 @@ Usage:
     python main.py
 """
 
+import hashlib
 import os
+from typing import Any
+import uuid
 from fasthtml.common import *
 
 from decision_tree import DECISION_TREES, get_all_emotions, get_node, get_quadrant_emotions, get_tree
@@ -915,6 +918,8 @@ def tree_route(quadrant: str, path: str, lang: str = "es", step: str = "3",
 
 @app.post("/feedback")
 def feedback_route(
+    req: Request = None,
+    session: Any = None,
     user_text: str = "",
     lang: str = "es",
     quadrant: str = "",
@@ -948,6 +953,21 @@ def feedback_route(
     clean_text = clean_text[:300]
     clean_comments = (comments or "").strip()[:150] if comments else None
 
+    # Generate an anonymous, privacy-safe session hash for deduplication
+    session_id = None
+    if session is not None and hasattr(session, "get"):
+        session_id = session.get("session_id")
+        if not session_id:
+            session_id = str(uuid.uuid4())
+            session["session_id"] = session_id
+    ip = ""
+    ua = ""
+    if req is not None:
+        ip = req.headers.get("x-forwarded-for", req.client.host if req.client else "")
+        ua = req.headers.get("user-agent", "")
+    seed = f"{session_id or ''}:{ip}:{ua}"
+    session_hash = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16] if seed.strip(":") else None
+
     # Resolve canonical quadrant: specific emotion takes precedence over radio button
     final_corrected_quad = None
     if corrected_emotion:
@@ -971,6 +991,7 @@ def feedback_route(
         corrected_quadrant=final_corrected_quad,
         corrected_emotion=corrected_emotion if corrected_emotion else None,
         comments=clean_comments,
+        session_hash=session_hash,
     )
 
     store = get_feedback_store()

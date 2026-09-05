@@ -166,6 +166,8 @@ def test_endpoint_feedback_positive_vote(test_client):
     assert len(matching) >= 1
     assert matching[0].rating == "positive"
     assert matching[0].predicted_quadrant == "alta_negativa"
+    assert matching[0].session_hash is not None
+    assert len(matching[0].session_hash) == 16
 
 
 def test_endpoint_feedback_negative_with_correction(test_client):
