@@ -29,3 +29,7 @@ build/
 
 # Vercel
 .vercel/
+
+# Testing & Benchmarks
+.pytest_cache/
+.benchmarks/

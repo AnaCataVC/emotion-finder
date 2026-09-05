@@ -9,8 +9,13 @@
 - **Vercel: Officially supported** (ASGI auto-detection, templates exist)
 - Vercel limits: 500MB uncompressed, 300s timeout, 1024MB memory
 - Single-file main.py is idiomatic for small apps
-- Model loading: global scope caching pattern for serverless
-- Cold starts: 1.2-3.5s with ML model
+- Model loading: global scope singleton caching pattern in `inference.py` for persistent execution across warm microVMs.
+- **Benchmarked Cold Starts**: **<1.5s cold starts** and **<5ms warm inference** using lightweight, joblib-compressed scikit-learn pipelines (~27 KB).
+
+## Related References
+- [ML Emotion Pipeline Architecture](ml-emotion-pipeline.md)
+- [Dialectal Idioms & Affective Mapping](dialectal-idioms-affective-mapping.md)
+- [Adversarial Audit & Robustness Learnings](../learning/adversarial-audit-lessons.md)
 
 ## Sources
 - https://docs.fastht.ml/

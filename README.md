@@ -24,11 +24,12 @@
 ### 📌 Project Overview
 **Emotion Finder** is an interactive, bilingual web application engineered to bridge the gap between vague somatic/mental sensations and emotional self-awareness. 
 
-Instead of forcing users to guess abstract psychological labels from an overwhelming drop-down list, Emotion Finder employs a two-stage hybrid architecture:
+Instead of forcing users to guess abstract psychological labels from an overwhelming drop-down list, Emotion Finder employs a three-stage hybrid architecture:
 1. **Affective NLP Classifier**: Maps freeform natural language descriptions of physical and cognitive sensations into one of the 4 quadrants of **Russell's Circumplex Model of Affect** (Activation/Arousal $\times$ Valence).
-2. **Binary Somatic Decision Tree**: Guides the user through an interactive 4-step sequence of body-focused Yes/No questions to pinpoint **1 of 64 precise emotions** (16 per quadrant).
-3. **Empathetic Emotional Clarity**: Concludes with a focused card presenting exclusively the identified emotion, its visual archetype, and an empathetic, introspective definition to facilitate emotional clarity.
-4. **Hypermedia-Driven Architecture (FastHTML + HTMX)**: Delivers smooth, SPA-like partial DOM transitions rendered entirely in server-side Python with zero client-side JavaScript build steps.
+2. **Semantic Emotion Matcher**: Ranks the quadrant's 16 emotions by TF-IDF cosine similarity between the user's own words and each emotion's description, jumping straight to a confident match instead of always asking generic sensation questions.
+3. **Binary Somatic Decision Tree (fallback)**: When no match is confident enough, guides the user through an interactive 4-step sequence of body-focused Yes/No questions to pinpoint **1 of 64 precise emotions** (16 per quadrant) — always reachable manually from a direct match too, for users who want to refine it.
+4. **Empathetic Emotional Clarity**: Concludes with a focused card presenting exclusively the identified emotion, its visual archetype, and an empathetic, introspective definition to facilitate emotional clarity.
+5. **Hypermedia-Driven Architecture (FastHTML + HTMX)**: Delivers smooth, SPA-like partial DOM transitions rendered entirely in server-side Python with zero client-side JavaScript build steps.
 
 ---
 
@@ -41,36 +42,45 @@ Instead of forcing users to guess abstract psychological labels from an overwhel
                    Language Router (ES / EN Heuristic)
                                      │
                                      ▼
-                  Text Preprocessing & Normalization
-          (Accent stripping, Snowball/Porter stemming, domain stopwords)
+                   Text Preprocessing & Normalization
+           (Accent stripping, Snowball/Porter stemming, domain stopwords)
                                      │
                                      ▼
                 TF-IDF + Logistic Regression Classifier
+       (Trained on 700 balanced samples, 175/quadrant; ngram_range=(1,2); ~27 KB)
                                      │
                                      ▼
                      Affective Quadrant Prediction
             (e.g., High Arousal · Negative Valence / alta_negativa)
                                      │
                                      ▼
-                       HTMX Partial DOM Replacement
+           Precomputed TF-IDF Semantic Matcher (emotion_matcher.py)
+        (Stopword-filtered, zero-overlap gating nnz==0, score >= 0.35)
                                      │
-                                     ▼
-                  Binary Somatic Decision Tree (4 Steps)
-            [Q1: Body Tension] ──Yes/No──> [Q2: Heart Rate]
-                                           │
-                                         Yes/No
-                                           │
-                                           ▼
-                                [Q3: Cognitive Focus]
-                                           │
-                                         Yes/No
-                                           │
-                                           ▼
-                                 [Q4: Action Impulse]
-                                     │
-                                     ▼
+                confident match ────┴──── weak match
+                       │                       │
+                       │                       ▼
+                       │          HTMX Partial DOM Replacement
+                       │                       │
+                       │                       ▼
+                       │          Binary Somatic Decision Tree (4 Steps)
+                       │        [Q1: Body Tension] ──Yes/No──> [Q2: Heart Rate]
+                       │                                       │
+                       │                                     Yes/No
+                       │                                       │
+                       │                                       ▼
+                       │                            [Q3: Cognitive Focus]
+                       │                                       │
+                       │                                     Yes/No
+                       │                                       │
+                       │                                       ▼
+                       │                             [Q4: Action Impulse]
+                       │                                       │
+                       └───────────────────┬───────────────────┘
+                                            ▼
                        Final Emotion Result Card
        (Identified Emotion + Representative Emoji + Empathetic Definition)
+     (a confident match also offers a manual "explore with questions" escape hatch)
 ```
 
 ---
@@ -128,7 +138,7 @@ Emotion Finder addresses this through **affective functional mapping** rather th
 | **Baja Positiva** | *"Estar piola y relajado"* | Undisturbed, peaceful tranquility | *"Chill as anything"* / *"At ease"* | Calma / Serenidad |
 | **Baja Positiva** | *"Estar tranqui"* | Quiet contentment, unbothered ease | *"Right as rain"* / *"Ticking along nicely"* | Relajación / Paz interior |
 
-> For comprehensive documentation on corpus curation and linguistic validation, see [docs/external-references/dialectal-idioms-affective-mapping.md](docs/external-references/dialectal-idioms-affective-mapping.md).
+> Not every idiom in this table actually made it into the training data — some are deliberately kept out as a held-out generalization check. See [docs/external-references/dialectal-idioms-affective-mapping.md](docs/external-references/dialectal-idioms-affective-mapping.md) §4 for the exact split and measured accuracy on the ones that aren't.
 
 ---
 
@@ -140,14 +150,25 @@ Emotion Finder addresses this through **affective functional mapping** rather th
 - **Stateless Serverless ASGI**: The application is packaged for serverless ASGI deployment on Vercel (`api/index.py`), eliminating container orchestration overhead and operating entirely within zero-cost serverless tiers.
 
 #### 2. NLP Feature Bias Debugging
-- **The Domain Meta-Word Shortcut**: During evaluation with idiomatic phrases like *"estoy con las emociones a flor de piel"*, the classifier initially misclassified the text. Investigation revealed a **feature bias**: generic meta-words (*"emociones"*, *"sentimientos"*, *"sensaciones"*) were unevenly distributed across dataset quadrants, acting as spurious correlation shortcuts. The model learned to classify the presence of the word *"emociones"* rather than the affective signal.
-- **The Engineering Fix**:
-  1. Implemented domain meta-stopwords (`_DOMAIN_META_STOPWORDS_ES` and `_DOMAIN_META_STOPWORDS_EN`) in `train_model.py` to systematically neutralize non-discriminative terms (`emocion`, `sentimiento`, `sensacion`, `emotion`, `feeling`).
-  2. Balanced all meta-words uniformly across the 4 quadrants in the synthetic training datasets (`data/emotions_es_v2.csv` and `data/emotions_en_v2.csv`, ~650 rows each).
-  3. Preserved critical bigrams with `ngram_range=(1, 2)`, enabling collocations such as `"flor piel"`, `"mecha corta"`, `"on edge"`, and `"proper wound"` to retain their discriminative weight.
+- **The Domain Meta-Word Shortcut**: Generic meta-words (*"emociones"*, *"sentimientos"*, *"sensaciones"*) can act as spurious correlation shortcuts if unevenly distributed across dataset quadrants — the model learns to key off the word *"emociones"* rather than the affective signal.
+- **The Engineering Fix**: Domain meta-stopwords (`_DOMAIN_META_STOPWORDS_ES` and `_DOMAIN_META_STOPWORDS_EN`) in `train_model.py` systematically neutralize non-discriminative terms (`emocion`, `sentimiento`, `sensacion`, `emotion`, `feeling`), while `ngram_range=(1, 2)` preserves discriminative bigrams like `"flor piel"` or `"mecha corta"`.
 - **Sentiment-Aware Stopword Preservation**: Standard NLTK stopword lists remove essential negation markers (`no`, `sin`, `nunca`, `jamás`, `not`, `without`) and intensifiers (`muy`, `demasiado`, `very`, `extremely`). In affective NLP, naive stopword removal inverts valence (e.g., *"no me siento bien"* becomes *"bien"*). A custom whitelist explicitly preserves these crucial valence and arousal modulators.
 
-#### 3. FastHTML on Vercel Serverless
+#### 3. Dataset Generation Determinism
+- **The Bug**: `data/generate_datasets.py` collects generated phrases in a `set()` before shuffling with a fixed `random.seed(42)`. A `set`'s iteration order depends on the process's hash seed, which is randomized by default and unaffected by `random.seed` — so two runs of the "reproducible" generator silently produced different training CSVs (~65% of rows differed between consecutive runs, verified empirically). A model trained on one run's data could pass an idiom test that the *next* run's data would fail, with no code change in between.
+- **The Fix**: `phrases_list = sorted(phrases)` before shuffling, in both the Spanish and English generators, restoring true run-to-run reproducibility.
+- **Consequence for thresholds**: `inference.py`'s per-language `_CONFIDENCE_THRESHOLD` / `_INTENSITY_LOW_MAX` / `_SECONDARY_GAP_THRESHOLD` are derived from `train_model.py`'s printed report and must be resynced after every retrain — they're calibrated to one specific model, not a fixed constant.
+
+#### 4. Regression vs. Held-Out Idiom Probes
+- **The Problem**: CV `f1_macro` on the templated synthetic data saturates near 1.0 for almost any hyperparameter choice, so it can't tell a genuinely-generalizing config from one that overfits the combinatorial template structure.
+- **`REGRESSION_PROBES`** (`train_model.py`): dialectal idioms that kept misclassifying during evaluation, whose key vocabulary was then added to the training templates. Used to pick between tuned and default hyperparameters — no longer a generalization test (the vocabulary is now in-distribution), but still catches an overfit hyperparameter choice.
+- **`HELD_OUT_IDIOM_PROBES`** (`train_model.py`): a second, disjoint set of idioms whose vocabulary is deliberately kept **out** of the training templates. Printed as a diagnostic only, never used to pick hyperparameters. Measured accuracy: **~29% (ES) / ~40% (EN)** — the honest ceiling of a bag-of-words TF-IDF classifier on figurative language it has never seen. See `docs/external-references/ml-emotion-pipeline.md` §6 for the full writeup.
+
+#### 5. Semantic Emotion Matcher (`emotion_matcher.py`)
+- **Precomputed TF-IDF Matching**: Instead of always asking four generic yes/no somatic questions to pick 1 of 16 emotions, the app precomputes TF-IDF vector representations of the 16 emotion descriptions per quadrant on module initialization.
+- **Stopword Gating & Calibrated Threshold**: By enforcing strict stopword filtering (ignoring generic function words like *"de"*, *"la"*, *"the"*, *"with"*) and a calibrated threshold (`score >= 0.35`), neutral or ambiguous sentences cleanly fall through to the 4-step somatic decision tree, while genuine semantic matches skip straight to the identified emotion card (with manual tree exploration still available as a fallback).
+
+#### 6. FastHTML on Vercel Serverless
 - **Cold-Start & Memory Constraints**: Pre-trained Transformer models (BERT, RoBERTa) exceed Vercel's 250 MB / 500 MB serverless limits and introduce 5–12s cold starts. By pairing TF-IDF with L2-regularized Logistic Regression and Snowball/Porter stemming, each model compresses to **~27 KB** with **<1.5s cold starts** and **<5ms warm inference**.
 - **Global Scope Singleton Pattern**: Models are loaded lazily into module globals (`inference.py`), persisting across warm AWS Lambda / Vercel microVM invocations.
 - **Serialization Isolation**: Tokenizer functions (`tokenize_es`, `tokenize_en`, `strip_accents`) are isolated into an independent `preprocessing.py` module, ensuring that joblib unpickling succeeds seamlessly across training, testing, and Vercel ASGI execution contexts without namespace shadowing.
@@ -214,11 +235,12 @@ Open your browser and navigate to **[http://localhost:5001](http://localhost:500
 ### 📌 Descripción del Proyecto
 **Emotion Finder** es una aplicación web interactiva y bilingüe diseñada para transformar sensaciones físicas y estados mentales difusos en autoconocimiento emocional preciso.
 
-En lugar de obligar al usuario a elegir etiquetas psicológicas abstractas de una lista abrumadora, Emotion Finder implementa una arquitectura híbrida de dos etapas:
+En lugar de obligar al usuario a elegir etiquetas psicológicas abstractas de una lista abrumadora, Emotion Finder implementa una arquitectura híbrida de tres etapas:
 1. **Clasificador NLP de Afecto**: Mapea descripciones en lenguaje natural sobre sensaciones físicas y cognitivas en uno de los 4 cuadrantes del **Modelo Circunflejo del Afecto de Russell** (Activación $\times$ Valencia).
-2. **Árbol de Decisión Somático Binario**: Guía al usuario a través de una secuencia interactiva de 4 preguntas corporales de Sí/No para identificar exactamente **1 de 64 emociones precisas** (16 por cuadrante).
-3. **Claridad Emocional Empática**: Concluye en una tarjeta enfocada que presenta exclusivamente la emoción identificada, su emoji representativo y una definición empática e introspectiva orientada a facilitar la comprensión emocional.
-4. **Arquitectura Hypermedia (FastHTML + HTMX)**: Brinda transiciones de página suaves y reactivas tipo SPA renderizadas 100% en Python del lado del servidor, sin dependencias de compilación ni frameworks pesados de JavaScript.
+2. **Matcher Semántico de Emoción**: Ordena las 16 emociones del cuadrante por similitud coseno TF-IDF entre las propias palabras del usuario y la descripción de cada emoción, saltando directo a un match confiable en vez de preguntar siempre lo mismo.
+3. **Árbol de Decisión Somático Binario (respaldo)**: Cuando ningún match es suficientemente confiable, guía al usuario a través de una secuencia interactiva de 4 preguntas corporales de Sí/No para identificar **1 de 64 emociones precisas** (16 por cuadrante) — también accesible manualmente desde un match directo, para quien prefiera refinarlo.
+4. **Claridad Emocional Empática**: Concluye en una tarjeta enfocada que presenta exclusivamente la emoción identificada, su emoji representativo y una definición empática e introspectiva orientada a facilitar la comprensión emocional.
+5. **Arquitectura Hypermedia (FastHTML + HTMX)**: Brinda transiciones de página suaves y reactivas tipo SPA renderizadas 100% en Python del lado del servidor, sin dependencias de compilación ni frameworks pesados de JavaScript.
 
 ---
 
@@ -235,32 +257,41 @@ En lugar de obligar al usuario a elegir etiquetas psicológicas abstractas de un
        (Eliminación de tildes, stemming Snowball/Porter, stopwords de dominio)
                                      │
                                      ▼
-                Clasificador TF-IDF + Regresión Logística
+                 Clasificador TF-IDF + Regresión Logística
+     (Entrenado con 700 muestras balanceadas, 175/cuadrante; n-gramas (1,2); ~27 KB)
                                      │
                                      ▼
                      Predicción del Cuadrante Afectivo
            (ej., Alta Activación · Valencia Negativa / alta_negativa)
                                      │
                                      ▼
-                        Reemplazo Parcial de DOM vía HTMX
+           Matcher Semántico TF-IDF Precalculado (emotion_matcher.py)
+        (Filtrado de stopwords, compuerta de solapamiento nnz==0, score >= 0.35)
                                      │
-                                     ▼
-                 Árbol de Decisión Somático Binario (4 Pasos)
-           [P1: Tensión Corporal] ──Sí/No──> [P2: Ritmo Cardíaco]
-                                             │
-                                           Sí/No
-                                             │
-                                             ▼
-                                   [P3: Enfoque Cognitivo]
-                                             │
-                                           Sí/No
-                                             │
-                                             ▼
-                                  [P4: Impulso de Acción]
-                                     │
-                                     ▼
+                match confiable ────┴──── match débil
+                       │                       │
+                       │                       ▼
+                       │          Reemplazo Parcial de DOM vía HTMX
+                       │                       │
+                       │                       ▼
+                       │         Árbol de Decisión Somático Binario (4 Pasos)
+                       │        [P1: Tensión Corporal] ──Sí/No──> [P2: Ritmo Cardíaco]
+                       │                                          │
+                       │                                        Sí/No
+                       │                                          │
+                       │                                          ▼
+                       │                              [P3: Enfoque Cognitivo]
+                       │                                          │
+                       │                                        Sí/No
+                       │                                          │
+                       │                                          ▼
+                       │                             [P4: Impulso de Acción]
+                       │                                          │
+                       └───────────────────┬──────────────────────┘
+                                            ▼
                       Tarjeta de Resultado Emocional
         (Emoción Identificada + Emoji Representativo + Definición Empática)
+   (un match confiable también ofrece explorar manualmente con preguntas)
 ```
 
 ---
@@ -299,6 +330,8 @@ Emotion Finder resuelve esto implementando un **mapeo funcional afectivo** en lu
 | **Baja Positiva** | *"Estar piola y relajado"* | Sosiego no perturbado, tranquilidad íntima | *"Chill as anything"* / *"At ease"* | Calma / Serenidad |
 | **Baja Positiva** | *"Estar tranqui"* | Calma y descanso sin preocupaciones | *"Right as rain"* / *"Ticking along nicely"* | Relajación / Paz interior |
 
+> No todos los modismos de esta tabla llegaron al dataset de entrenamiento — algunos se mantienen deliberadamente fuera como chequeo de generalización held-out. Ver [docs/external-references/dialectal-idioms-affective-mapping.md](docs/external-references/dialectal-idioms-affective-mapping.md) §4 para el detalle exacto y la precisión medida en los que quedaron fuera.
+
 ---
 
 ### 💡 Aprendizajes Clave de Ingeniería
@@ -309,15 +342,26 @@ Emotion Finder resuelve esto implementando un **mapeo funcional afectivo** en lu
 - **Microarquitectura Serverless ASGI**: El proyecto se ejecuta en Vercel mediante un punto de entrada ASGI nativo (`api/index.py`), eliminando la necesidad de gestionar contenedores o servidores dedicados.
 
 #### 2. Depuración de Sesgos en NLP
-- **El Atajo de las Meta-Palabras de Dominio**: Al analizar frases como *"estoy con las emociones a flor de piel"*, el clasificador fallaba inicialmente debido a un **sesgo de características**: palabras genéricas (*"emociones"*, *"sentimientos"*, *"sensaciones"*) estaban desbalanceadas en los datos sintéticos iniciales, provocando que el modelo aprendiera que la mera presencia de *"emociones"* indicaba un cuadrante determinado.
-- **Solución Implementada**:
-  1. Se crearon listas de stopwords de dominio (`_DOMAIN_META_STOPWORDS_ES` y `_DOMAIN_META_STOPWORDS_EN`) en `train_model.py` para neutralizar términos genéricos.
-  2. Se equilibró la presencia de estas palabras de forma uniforme en los 4 cuadrantes de los datasets de entrenamiento (`data/emotions_es_v2.csv` y `data/emotions_en_v2.csv`).
-  3. Se preservaron los bigramas mediante `ngram_range=(1, 2)` para que expresiones como `"flor piel"` o `"mecha corta"` conserven su peso contextual íntegro.
+- **El Atajo de las Meta-Palabras de Dominio**: Palabras genéricas (*"emociones"*, *"sentimientos"*, *"sensaciones"*) pueden actuar como atajo de correlación espuria si están desbalanceadas entre cuadrantes — el modelo aprende a fijarse en la palabra *"emociones"* en vez de la señal afectiva real.
+- **Solución Implementada**: Listas de stopwords de dominio (`_DOMAIN_META_STOPWORDS_ES` y `_DOMAIN_META_STOPWORDS_EN`) en `train_model.py` neutralizan términos genéricos (`emocion`, `sentimiento`, `sensacion`), mientras `ngram_range=(1, 2)` preserva bigramas discriminativos como `"flor piel"` o `"mecha corta"`.
 - **Conservación de Stopwords Críticas**: Las listas estándar de stopwords en español remueven negaciones (`no`, `sin`, `nunca`, `jamás`) e intensificadores (`muy`, `demasiado`). Una frase como *"no me siento bien"* se convertía erróneamente en *"bien"*, invirtiendo la valencia afectiva. Diseñar una lista de exclusión que preserve estas partículas fue indispensable.
 
-#### 3. FastHTML en Vercel Serverless
-- **Optimización de Arranque en Frío y Memoria**: Redes neuronales masivas exceden los límites de Vercel y generan arranques en frío de 5 a 12 segundos. Un pipeline TF-IDF + Regresión Logística optimizado pesa **~27 KB** y responde en **<5ms**.
+#### 3. Determinismo en la Generación del Dataset
+- **El Bug**: `data/generate_datasets.py` acumula las frases generadas en un `set()` antes de mezclarlas con `random.seed(42)` fijo. El orden de iteración de un `set` depende del hash-seed del proceso, que se aleatoriza por defecto y `random.seed` no lo controla — así que dos corridas del generador "reproducible" producían CSVs de entrenamiento distintos (~65% de filas diferían entre corridas consecutivas, verificado empíricamente). Un modelo entrenado en una corrida podía pasar un test de un modismo que la *siguiente* corrida haría fallar, sin ningún cambio de código de por medio.
+- **La Solución**: `phrases_list = sorted(phrases)` antes de mezclar, en ambos generadores (español e inglés), restaurando la reproducibilidad real entre corridas.
+- **Consecuencia para los umbrales**: los `_CONFIDENCE_THRESHOLD` / `_INTENSITY_LOW_MAX` / `_SECONDARY_GAP_THRESHOLD` por idioma en `inference.py` se derivan del reporte que imprime `train_model.py` y deben resincronizarse después de cada reentrenamiento — están calibrados para un modelo específico, no son una constante fija.
+
+#### 4. Probes de Regresión vs. Probes Genuinamente Held-Out
+- **El Problema**: El `f1_macro` de CV sobre los datos sintéticos templados satura cerca de 1.0 con casi cualquier hiperparámetro, así que no distingue una configuración que generaliza de verdad de una que sobreajusta la estructura combinatoria de las plantillas.
+- **`REGRESSION_PROBES`** (`train_model.py`): modismos dialectales que seguían clasificándose mal en la evaluación, cuyo vocabulario clave se agregó después a las plantillas de entrenamiento. Se usan para elegir entre hiperparámetros ajustados y los por defecto — ya no es un test de generalización (el vocabulario ya está en la distribución de entrenamiento), pero sigue detectando una elección de hiperparámetros que sobreajusta.
+- **`HELD_OUT_IDIOM_PROBES`** (`train_model.py`): un segundo conjunto, disjunto, de modismos cuyo vocabulario se mantiene deliberadamente **fuera** de las plantillas de entrenamiento. Se imprime solo como diagnóstico, nunca se usa para elegir hiperparámetros. Precisión medida: **~29% (ES) / ~40% (EN)** — el techo honesto de un clasificador TF-IDF de bolsa de palabras frente a lenguaje figurado que nunca vio. Ver `docs/external-references/ml-emotion-pipeline.md` §6 para el detalle completo.
+
+#### 5. Matcher Semántico de Emoción (`emotion_matcher.py`)
+- **Matching TF-IDF Precalculado**: En vez de preguntar siempre cuatro preguntas somáticas genéricas de sí/no para elegir 1 de 16 emociones, la aplicación precalcula representaciones vectoriales TF-IDF para las descripciones de las 16 emociones por cuadrante durante la inicialización del módulo.
+- **Compuerta de Stopwords y Umbral Calibrado**: Al incorporar filtrado estricto de stopwords (ignorando palabras funcionales genéricas) y un umbral calibrado (`score >= 0.35`) junto con validación de solapamiento léxico no nulo (`nnz == 0 -> 0.0`), las frases neutras o ambiguas caen limpiamente al árbol somático de 4 pasos, mientras que las coincidencias semánticas genuinas acceden directamente a la tarjeta de emoción identificada (manteniendo el árbol manual como opción de exploración).
+
+#### 6. FastHTML en Vercel Serverless
+- **Optimización de Arranque en Frío y Memoria**: Redes neuronales masivas exceden los límites de Vercel y generan arranques en frío de 5 a 12 segundos. Un pipeline TF-IDF + Regresión Logística optimizado con n-gramas (1, 2) pesa **~27 KB** y responde en **<5ms** en caliente con arranques en frío de **<1.5s**.
 - **Patrón Singleton a Nivel de Módulo**: Los modelos se cargan de forma perezosa en variables globales del módulo (`inference.py`), manteniéndose en memoria durante invocaciones calientes sucesivas.
 - **Aislamiento de Serialización**: Las funciones de tokenización se ubicaron en `preprocessing.py`, garantizando que joblib pueda deserializar los pipelines sin fallos de importación cruzada en el entorno serverless de Vercel.
 
@@ -362,15 +406,16 @@ Abre tu navegador en **[http://localhost:5001](http://localhost:5001)**.
 emotion-finder/
 ├── main.py                  # FastHTML web app (routes, UI components, HTMX swaps)
 ├── inference.py             # ML inference module & language routing heuristic
+├── emotion_matcher.py       # TF-IDF cosine-similarity direct emotion matcher
 ├── preprocessing.py         # Stemming tokenizers & unicode accent normalization
 ├── decision_tree.py         # 64-emotion bilingual binary decision tree structure
 ├── train_model.py           # scikit-learn training script (TF-IDF + LogisticRegression)
 ├── api/
 │   └── index.py             # Serverless ASGI entrypoint for Vercel deployment
 ├── data/
-│   ├── emotions_es_v2.csv   # Balanced Spanish affective dataset (~650 samples)
-│   ├── emotions_en_v2.csv   # Balanced English affective dataset (~650 samples)
-│   ├── generate_datasets.py # Script for synthetic training dataset expansion
+│   ├── emotions_es_v2.csv   # Balanced Spanish affective dataset (700 samples)
+│   ├── emotions_en_v2.csv   # Balanced English affective dataset (700 samples)
+│   ├── generate_datasets.py # Deterministic synthetic training dataset generator
 │   └── archive/             # Historical baseline seed datasets
 ├── models/
 │   ├── model_es.joblib      # Compressed Spanish pipeline (~27 KB)
@@ -378,10 +423,12 @@ emotion-finder/
 ├── tests/
 │   └── test_pipeline.py     # Automated test suite (NLP, edge cases, tree topology, web app)
 ├── docs/
-│   └── external-references/ # Technical research & architecture references
-│       ├── dialectal-idioms-affective-mapping.md # Chilean & British idioms mapping
-│       ├── fasthtml-stack.md                 # FastHTML & Vercel serverless notes
-│       └── ml-emotion-pipeline.md            # Pipeline architecture & benchmarks
+│   ├── external-references/ # Technical research & architecture references
+│   │   ├── dialectal-idioms-affective-mapping.md # Chilean & British idioms mapping
+│   │   ├── fasthtml-stack.md                 # FastHTML & Vercel serverless notes
+│   │   └── ml-emotion-pipeline.md            # Pipeline architecture & benchmarks
+│   └── learning/            # Post-audit architectural lessons & learnings
+│       └── adversarial-audit-lessons.md      # Adversarial review learnings & insights
 ├── requirements.txt         # Production runtime dependencies
 ├── requirements-dev.txt     # Development & training dependencies
 ├── vercel.json              # Vercel serverless build & routing configuration
