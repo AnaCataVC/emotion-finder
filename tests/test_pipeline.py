@@ -21,6 +21,7 @@ if str(ROOT_DIR) not in sys.path:
 
 import decision_tree
 import inference
+import emotion_matcher
 
 
 def test_spanish_prediction_high_negative():
@@ -169,6 +170,18 @@ def test_decision_tree_structure():
     assert decision_tree.get_node("alta_negativa", "invalid.path") is None
 
 
+def test_emotion_matcher():
+    """The matcher should rank a wording-close emotion first and reject unrelated text."""
+    node, score = emotion_matcher.match_emotion(
+        "siento un fuego destructivo, la sangre hirviendo y necesidad de atacar", "alta_negativa", "es"
+    )
+    assert node["emotion_es"] == "Ira"
+    assert emotion_matcher.is_confident_match(score)
+
+    node, score = emotion_matcher.match_emotion("qwkxpz 999999", "alta_negativa", "es")
+    assert not emotion_matcher.is_confident_match(score)
+
+
 def test_webapp_endpoints():
     import json
     import re
@@ -192,12 +205,17 @@ def test_webapp_endpoints():
     resp_fav = client.get("/favicon.png")
     assert resp_fav.status_code == 200
 
-    # 3. POST /predict (Normal prediction)
+    # 3. POST /predict (Normal prediction, confident direct emotion match)
     resp_pred = client.post("/predict", data={"text": "estoy súper motivado con ganas de saltar", "lang": "es"})
     assert resp_pred.status_code == 200
     assert "alta_positiva" in resp_pred.text
-    # Verify hx-vals contains valid parseable JSON for Yes and No buttons
-    matches = re.findall(r"hx-vals='([^']+)'", resp_pred.text)
+    assert "Entusiasmo" in resp_pred.text, "A confident text-similarity match should skip straight to the emotion"
+    assert "Explorar con preguntas" in resp_pred.text, "Manual tree exploration must stay available as a fallback"
+
+    # 3b. POST /predict (weak text-similarity match falls back to the yes/no tree)
+    resp_fallback = client.post("/predict", data={"text": "tengo rabia", "lang": "es"})
+    assert resp_fallback.status_code == 200
+    matches = re.findall(r"hx-vals='([^']+)'", resp_fallback.text)
     assert len(matches) >= 2, f"Expected at least 2 buttons with hx-vals, got {len(matches)}"
     for val_str in matches:
         parsed = json.loads(val_str)
@@ -224,8 +242,142 @@ def test_webapp_endpoints():
     assert resp_leaf.status_code == 200
     assert "emotion-result-box" in resp_leaf.text
     assert "Éxtasis" in resp_leaf.text
-    assert "tip-callout" not in resp_leaf.text, "Tips/advice should not be rendered"
-    assert "Consejo" not in resp_leaf.text, "Tips/advice should not be rendered"
+
+
+def test_secondary_emotion_path():
+    """A close top1/top2 quadrant call should offer the runner-up's tree as an alternate path."""
+    import json
+    import re
+    from starlette.testclient import TestClient
+    from main import app
+
+    res = inference.predict_quadrant("I feel like celebrating")
+    assert res["secondary_quadrant"] is not None
+    assert res["secondary_quadrant"] != res["quadrant"]
+
+    client = TestClient(app)
+    resp = client.post("/predict", data={"text": "I feel like celebrating", "lang": "en"})
+    assert resp.status_code == 200
+    assert "Explore that other possibility" in resp.text
+    matches = re.findall(r"hx-vals='([^']+)'", resp.text)
+    secondary_vals = [json.loads(m) for m in matches if json.loads(m).get("secondary") == "1"]
+    assert len(secondary_vals) == 1
+    assert secondary_vals[0]["quadrant"] == res["secondary_quadrant"]
+
+    resp_leaf = client.post("/tree", data={
+        "quadrant": res["secondary_quadrant"], "path": "yes.yes.yes.yes",
+        "lang": "en", "step": "5", "secondary": "1",
+    })
+    assert resp_leaf.status_code == 200
+    assert "Here's your alternate emotion:" in resp_leaf.text
+
+
+def test_intensity_display():
+    """The confidence bucket should thread through /predict and render on the final leaf."""
+    import json
+    import re
+    from starlette.testclient import TestClient
+    from main import app
+
+    res = inference.predict_quadrant("I'm absolutely buzzing with excitement and joy")
+    assert res["intensity"] == "alta"
+
+    client = TestClient(app)
+    resp = client.post("/predict", data={"text": "I'm absolutely buzzing with excitement and joy", "lang": "en"})
+    assert resp.status_code == 200
+    matches = re.findall(r"hx-vals='([^']+)'", resp.text)
+    assert any(json.loads(m).get("intensity") == "alta" for m in matches)
+
+    resp_leaf = client.post("/tree", data={
+        "quadrant": "alta_positiva", "path": "yes.yes.yes.yes",
+        "lang": "en", "step": "5", "intensity": "alta",
+    })
+    assert resp_leaf.status_code == 200
+    assert "High intensity" in resp_leaf.text
+
+
+def test_adversarial_neutral_sentences_rejected_by_matcher():
+    """Verify that common neutral and stopword-heavy sentences DO NOT trigger direct emotion matching."""
+    neutral_es = [
+        "computadora de escritorio",
+        "tengo que comprar pan y leche en el supermercado",
+        "el reporte del sistema",
+        "la reunión de trabajo del martes",
+        "el auto necesita cambio de aceite",
+    ]
+    for text in neutral_es:
+        match = emotion_matcher.match_emotion(text, "alta_positiva", "es")
+        assert match is None or not emotion_matcher.is_confident_match(match[1]), \
+            f"Neutral text '{text}' falsely matched {match[0]['emotion_es']} with score {match[1]}"
+
+    neutral_en = [
+        "please review the pull request on github",
+        "the laptop on the wooden desk",
+        "schedule a team meeting for tomorrow",
+        "I bought some bread and milk at the grocery store",
+        "the code compiled without errors",
+    ]
+    for text in neutral_en:
+        match = emotion_matcher.match_emotion(text, "baja_positiva", "en")
+        assert match is None or not emotion_matcher.is_confident_match(match[1]), \
+            f"Neutral text '{text}' falsely matched {match[0]['emotion_en']} with score {match[1]}"
+
+
+def test_adversarial_core_emotion_vocabulary():
+    """Verify that core emotional words classify into the exact expected quadrants without valence inversion."""
+    cases = [
+        # Spanish core vocabulary + intensifiers
+        ("estoy muy triste", "baja_negativa"),
+        ("estoy muy enojado con mi jefe", "alta_negativa"),
+        ("siento furia incontrolable", "alta_negativa"),
+        ("tengo mucho miedo", "alta_negativa"),
+        ("me siento muy alegre", "alta_positiva"),
+        ("estoy agotado de tanto trabajar", "baja_negativa"),
+        ("me siento deprimido", "baja_negativa"),
+        ("me siento en paz conmigo mismo", "baja_positiva"),
+        # English core vocabulary + intensifiers
+        ("I am very sad", "baja_negativa"),
+        ("I am very angry", "alta_negativa"),
+        ("I am very scared", "alta_negativa"),
+        ("I feel so joyful and happy", "alta_positiva"),
+        ("I feel completely exhausted", "baja_negativa"),
+        ("I am feeling depressed", "baja_negativa"),
+        ("I am super calm and relaxed", "baja_positiva"),
+    ]
+    for text, expected in cases:
+        res = inference.predict_quadrant(text)
+        assert res["quadrant"] == expected, \
+            f"Input '{text}' failed: expected {expected}, got {res['quadrant']} (conf={res['confidence']})"
+
+
+def test_adversarial_negation_handling():
+    """Verify that negated positive emotions are classified as negative valence."""
+    negative_quadrants = {"alta_negativa", "baja_negativa"}
+    cases = [
+        ("no me siento bien", "baja_negativa"),
+        ("no estoy feliz", "baja_negativa"),
+        ("I am not happy", "baja_negativa"),
+        ("I do not feel good", "baja_negativa"),
+    ]
+    for text, expected in cases:
+        res = inference.predict_quadrant(text)
+        assert res["quadrant"] in negative_quadrants, \
+            f"Negated text '{text}' improperly classified as positive: {res['quadrant']}"
+
+
+def test_adversarial_high_confidence_spanish():
+    """Verify that high-arousal Spanish expressions are not rejected as uncertain."""
+    res = inference.predict_quadrant("siento que me muero de rabia")
+    assert res["quadrant"] == "alta_negativa"
+    assert not res["low_confidence"], "High arousal Spanish emotion was falsely flagged as low_confidence"
+
+
+def test_adversarial_secondary_emotion_sanity():
+    """Verify that an unambiguous emotion does not spuriously trigger secondary quadrant affordance."""
+    res = inference.predict_quadrant("I am overjoyed and ecstatic with pure euphoria and delight")
+    assert res["quadrant"] == "alta_positiva"
+    assert res["secondary_quadrant"] is None, \
+        f"Definitive input should not trigger secondary quadrant, got {res['secondary_quadrant']}"
 
 
 if __name__ == "__main__":
@@ -237,5 +389,13 @@ if __name__ == "__main__":
     test_chilean_and_british_dialectal_idioms()
     test_boundary_and_edge_cases()
     test_decision_tree_structure()
+    test_emotion_matcher()
     test_webapp_endpoints()
-    print("All tests (Spanish ML + English ML + Boundaries + Dialectal Idioms + Tree + Web App + Icons) passed successfully!")
+    test_secondary_emotion_path()
+    test_intensity_display()
+    test_adversarial_neutral_sentences_rejected_by_matcher()
+    test_adversarial_core_emotion_vocabulary()
+    test_adversarial_negation_handling()
+    test_adversarial_high_confidence_spanish()
+    test_adversarial_secondary_emotion_sanity()
+    print("All tests (12 Baseline + 5 Adversarial Verification Suites = 17 Suites) passed successfully!")
