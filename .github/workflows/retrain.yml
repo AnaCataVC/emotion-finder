@@ -19,6 +19,7 @@ jobs:
   retrain:
     name: Retrain & Validate Models
     runs-on: ubuntu-latest
+    environment: Production
 
     steps:
       - name: Checkout repository
