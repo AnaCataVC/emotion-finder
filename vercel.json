@@ -1,11 +1,14 @@
 {
   "version": 2,
   "functions": {
-    "main.py": {
-      "includeFiles": "models/**"
-    },
     "api/index.py": {
       "includeFiles": "models/**"
+    },
+    "main.py": {
+      "includeFiles": "models/**"
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index.py" }
+  ]
 }

@@ -13,6 +13,7 @@ import os
 from fasthtml.common import *
 
 from decision_tree import get_node, get_tree
+from emotion_matcher import is_confident_match, match_emotion
 from inference import detect_language, predict_quadrant
 
 # ---------------------------------------------------------------------------
@@ -281,6 +282,18 @@ a[role="button"].btn-outline:hover {
     letter-spacing: 0.04em;
 }
 
+.intensity-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.9rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin: 0 0 1.25rem 0.5rem;
+    color: var(--pico-muted-color);
+    border: 1px solid var(--pico-muted-border-color);
+}
+
 .q-alta_positiva {
     background: linear-gradient(135deg, rgba(255, 154, 68, 0.2), rgba(232, 67, 147, 0.2));
     color: #e84393;
@@ -395,6 +408,10 @@ _I18N = {
         "yes": "Sí",
         "no": "No",
         "your_emotion": "Tu emoción identificada es:",
+        "your_secondary_emotion": "Esta es tu emoción alternativa:",
+        "secondary_prompt": "🌗 También podrías estar sintiendo algo distinto. ¿Quieres explorar ese otro camino?",
+        "explore_secondary": "Explorar esa otra posibilidad",
+        "explore_manually": "¿No es exacto? Explorar con preguntas",
         "step": "Paso",
         "of": "de",
         "footer_text": "Emotion Finder · Basado en el Modelo Circunflejo del Afecto de Russell",
@@ -412,6 +429,10 @@ _I18N = {
         "yes": "Yes",
         "no": "No",
         "your_emotion": "Your identified emotion is:",
+        "your_secondary_emotion": "Here's your alternate emotion:",
+        "secondary_prompt": "🌗 You might also be feeling something different. Want to explore that other path?",
+        "explore_secondary": "Explore that other possibility",
+        "explore_manually": "Not quite right? Explore with questions",
         "step": "Step",
         "of": "of",
         "footer_text": "Emotion Finder · Grounded in Russell's Circumplex Model of Affect",
@@ -432,6 +453,11 @@ _QUADRANT_LABELS = {
         "baja_positiva": "🌿 Low Arousal · Positive",
         "baja_negativa": "🌧️ Low Arousal · Negative",
     },
+}
+
+_INTENSITY_LABELS = {
+    "es": {"baja": "Intensidad baja", "media": "Intensidad media", "alta": "Intensidad alta"},
+    "en": {"baja": "Low intensity", "media": "Medium intensity", "alta": "High intensity"},
 }
 
 
@@ -505,7 +531,8 @@ def _progress_bar(current_step: int, total_steps: int = 5):
     return Div(*steps, cls="progress-bar")
 
 
-def _render_question(question_text: str, quadrant: str, path: str, lang: str, step: int):
+def _render_question(question_text: str, quadrant: str, path: str, lang: str, step: int,
+                      intensity: str = "", secondary: str = "0"):
     """Helper to render a binary question card with Yes/No HTMX buttons (DRY)."""
     next_yes = f"{path}.yes" if path else "yes"
     next_no = f"{path}.no" if path else "no"
@@ -526,6 +553,8 @@ def _render_question(question_text: str, quadrant: str, path: str, lang: str, st
                         "path": next_yes,
                         "lang": lang,
                         "step": next_step,
+                        "intensity": intensity,
+                        "secondary": secondary,
                     },
                     cls="btn-gradient",
                 ),
@@ -539,6 +568,8 @@ def _render_question(question_text: str, quadrant: str, path: str, lang: str, st
                         "path": next_no,
                         "lang": lang,
                         "step": next_step,
+                        "intensity": intensity,
+                        "secondary": secondary,
                     },
                     cls="btn-outline",
                 ),
@@ -608,6 +639,67 @@ def get(lang: str = "es"):
     return _page_shell(content, lang)
 
 
+def _render_emotion_result(node: dict, quadrant: str, lang: str,
+                            intensity: str = "", secondary: str = "0",
+                            manual_explore_path: str | None = None):
+    """Render a leaf emotion node (name, emoji, description) as the final result card."""
+    emotion_key = f"emotion_{lang}"
+    desc_key = f"description_{lang}"
+
+    emotion_name = node.get(emotion_key, node.get("emotion_es", ""))
+    emoji = node.get("emoji", "🎯")
+    description = node.get(desc_key, node.get("description_es", ""))
+    quadrant_label = _QUADRANT_LABELS.get(lang, _QUADRANT_LABELS["es"]).get(quadrant, quadrant)
+    heading_key = "your_secondary_emotion" if secondary == "1" else "your_emotion"
+
+    intensity_label = _INTENSITY_LABELS.get(lang, {}).get(intensity)
+    intensity_badge = (
+        Span(intensity_label, cls="intensity-badge") if intensity_label else None
+    )
+
+    manual_explore_button = None
+    if manual_explore_path is not None:
+        manual_explore_button = Button(
+            t("explore_manually", lang),
+            hx_post="/tree",
+            hx_target="#result-area",
+            hx_swap="innerHTML transition:true",
+            hx_vals={
+                "quadrant": quadrant,
+                "path": manual_explore_path,
+                "lang": lang,
+                "step": "2",
+                "intensity": intensity,
+                "secondary": secondary,
+            },
+            cls="btn-outline",
+        )
+
+    return Article(
+        _progress_bar(current_step=5, total_steps=5),
+        Div(
+            Span(quadrant_label, cls=f"quadrant-badge q-{quadrant}"),
+            *((intensity_badge,) if intensity_badge else ()),
+            Div(emoji, cls="emotion-emoji-giant"),
+            P(t(heading_key, lang), style="color: var(--pico-muted-color); font-size: 0.95rem; margin-bottom: 0.25rem;"),
+            H2(emotion_name, cls="emotion-title-final"),
+            P(description, cls="emotion-desc-final"),
+            Div(
+                A(
+                    f"🔄 {t('try_again', lang)}",
+                    href=f"/?lang={lang}",
+                    role="button",
+                    cls="btn-gradient",
+                ),
+                *((manual_explore_button,) if manual_explore_button else ()),
+                style="margin-top: 1.5rem; display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;",
+            ),
+            cls="emotion-result-box",
+        ),
+        cls="brand-card",
+    )
+
+
 @app.post("/predict")
 def predict_route(text: str, lang: str = "es"):
     """Receive user text, predict Russell quadrant, return first question."""
@@ -634,10 +726,50 @@ def predict_route(text: str, lang: str = "es"):
 
     quadrant = result["quadrant"]
     quadrant_label = _QUADRANT_LABELS.get(lang, _QUADRANT_LABELS["es"]).get(quadrant, quadrant)
+    intensity = result.get("intensity") or ""
+    secondary_quadrant = result.get("secondary_quadrant")
 
     tree_root = get_tree(quadrant)
     if tree_root is None:
         return Div(P("Error: Decision tree not found for this quadrant."))
+
+    extra_blocks = []
+    if secondary_quadrant:
+        extra_blocks.append(Div(
+            P(t("secondary_prompt", lang), style="color: var(--pico-muted-color); font-size: 0.95rem; margin: 0.75rem 0 0.25rem;"),
+            Button(
+                t("explore_secondary", lang),
+                hx_post="/tree",
+                hx_target="#result-area",
+                hx_swap="innerHTML transition:true",
+                hx_vals={
+                    "quadrant": secondary_quadrant,
+                    "path": "",
+                    "lang": lang,
+                    "step": "2",
+                    "intensity": intensity,
+                    "secondary": "1",
+                },
+                cls="btn-outline",
+            ),
+            style="text-align: center;",
+        ))
+
+    # Try to jump straight to the closest of the quadrant's 16 emotions by
+    # comparing the user's own words against each one's description, instead
+    # of always asking four generic yes/no sensation questions. Falls back to
+    # the manual tree below when nothing matches confidently.
+    match = match_emotion(text, quadrant, lang)
+    if match is not None:
+        node, score = match
+        if is_confident_match(score):
+            return Div(
+                _render_emotion_result(
+                    node, quadrant, lang, intensity=intensity,
+                    manual_explore_path="",
+                ),
+                *extra_blocks,
+            )
 
     question_key = f"question_{lang}"
     question_text = tree_root.get(question_key, tree_root.get("question_es", ""))
@@ -653,12 +785,15 @@ def predict_route(text: str, lang: str = "es"):
             path="",
             lang=lang,
             step=2,
+            intensity=intensity,
         ),
+        *extra_blocks,
     )
 
 
 @app.post("/tree")
-def tree_route(quadrant: str, path: str, lang: str = "es", step: str = "3"):
+def tree_route(quadrant: str, path: str, lang: str = "es", step: str = "3",
+               intensity: str = "", secondary: str = "0"):
     """Navigate binary decision tree and render next question or final emotion."""
     if lang not in ("es", "en"):
         lang = "es"
@@ -675,35 +810,7 @@ def tree_route(quadrant: str, path: str, lang: str = "es", step: str = "3"):
 
     # Leaf node reached (Emotion detected)
     if "emotion_es" in node:
-        emotion_key = f"emotion_{lang}"
-        desc_key = f"description_{lang}"
-
-        emotion_name = node.get(emotion_key, node.get("emotion_es", ""))
-        emoji = node.get("emoji", "🎯")
-        description = node.get(desc_key, node.get("description_es", ""))
-        quadrant_label = _QUADRANT_LABELS.get(lang, _QUADRANT_LABELS["es"]).get(quadrant, quadrant)
-
-        return Article(
-            _progress_bar(current_step=5, total_steps=5),
-            Div(
-                Span(quadrant_label, cls=f"quadrant-badge q-{quadrant}"),
-                Div(emoji, cls="emotion-emoji-giant"),
-                P(t("your_emotion", lang), style="color: var(--pico-muted-color); font-size: 0.95rem; margin-bottom: 0.25rem;"),
-                H2(emotion_name, cls="emotion-title-final"),
-                P(description, cls="emotion-desc-final"),
-                Div(
-                    A(
-                        f"🔄 {t('try_again', lang)}",
-                        href=f"/?lang={lang}",
-                        role="button",
-                        cls="btn-gradient",
-                    ),
-                    style="margin-top: 1.5rem;",
-                ),
-                cls="emotion-result-box",
-            ),
-            cls="brand-card",
-        )
+        return _render_emotion_result(node, quadrant, lang, intensity=intensity, secondary=secondary)
 
     # Intermediate question node
     question_key = f"question_{lang}"
@@ -715,6 +822,8 @@ def tree_route(quadrant: str, path: str, lang: str = "es", step: str = "3"):
         path=path,
         lang=lang,
         step=current_step,
+        intensity=intensity,
+        secondary=secondary,
     )
 
 

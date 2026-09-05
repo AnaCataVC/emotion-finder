@@ -25,8 +25,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🤩",
                         "description_es": "Experimentas una felicidad tan intensa que casi trasciende lo físico. Todo tu ser vibra de alegría.",
                         "description_en": "You experience happiness so intense it almost transcends the physical. Your whole being vibrates with joy.",
-                        "tip_es": "Permítete sentirlo al máximo. Comparte esta energía o canalízala en algo creativo.",
-                        "tip_en": "Allow yourself to feel it fully. Share this energy or channel it into something creative."
                     },
                     "no": {
                         "emotion_es": "Euforia",
@@ -34,8 +32,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🙌",
                         "description_es": "Sientes un subidón de energía positiva inmensa, como si pudieras volar.",
                         "description_en": "You feel a massive rush of positive energy, as if you could fly.",
-                        "tip_es": "Usa esta alta energía para celebrar o realizar actividad física intensa.",
-                        "tip_en": "Use this high energy to celebrate or engage in intense physical activity."
                     }
                 },
                 "no": {
@@ -47,8 +43,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "❤️‍🔥",
                         "description_es": "Sientes una atracción magnética y un deseo profundo y físico hacia alguien o algo.",
                         "description_en": "You feel a magnetic attraction and a deep, physical desire toward someone or something.",
-                        "tip_es": "Expresa este amor abiertamente o dedícale tiempo a esa pasión.",
-                        "tip_en": "Express this love openly or dedicate time to that passion."
                     },
                     "no": {
                         "emotion_es": "Pasión",
@@ -56,8 +50,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🔥",
                         "description_es": "Hay un fuego en tu interior que te impulsa a entregarte por completo a lo que haces.",
                         "description_en": "There is a fire inside you that drives you to give yourself completely to what you do.",
-                        "tip_es": "Aprovecha este fuego para avanzar en proyectos importantes para ti.",
-                        "tip_en": "Harness this fire to advance projects that are important to you."
                     }
                 }
             },
@@ -73,8 +65,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🦸",
                         "description_es": "Sientes fuerza y solidez en tu cuerpo; una confianza física en tus propias capacidades.",
                         "description_en": "You feel strength and solidity in your body; a physical confidence in your own capabilities.",
-                        "tip_es": "Toma esa decisión difícil o da ese paso que has estado posponiendo.",
-                        "tip_en": "Make that difficult decision or take that step you've been putting off."
                     },
                     "no": {
                         "emotion_es": "Determinación",
@@ -82,8 +72,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "💪",
                         "description_es": "Tus músculos están tensos y listos para la acción; tienes una meta clara y física.",
                         "description_en": "Your muscles are tense and ready for action; you have a clear, physical goal.",
-                        "tip_es": "Enfoca esta tensión útil en completar tus tareas inmediatas.",
-                        "tip_en": "Focus this useful tension on completing your immediate tasks."
                     }
                 },
                 "no": {
@@ -95,8 +83,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "✨",
                         "description_es": "Una chispa eléctrica recorre tu cuerpo ante la perspectiva de algo nuevo o divertido.",
                         "description_en": "An electric spark runs through your body at the prospect of something new or fun.",
-                        "tip_es": "Disfruta el momento de anticipación, respira hondo para equilibrar tu energía.",
-                        "tip_en": "Enjoy the moment of anticipation, take deep breaths to balance your energy."
                     },
                     "no": {
                         "emotion_es": "Entusiasmo",
@@ -104,8 +90,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😆",
                         "description_es": "Te sientes vibrante y lleno de ganas de participar o involucrarte.",
                         "description_en": "You feel vibrant and full of desire to participate or get involved.",
-                        "tip_es": "Contagia esta energía positiva a quienes te rodean.",
-                        "tip_en": "Spread this positive energy to those around you."
                     }
                 }
             }
@@ -125,8 +109,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🤯",
                         "description_es": "El mundo parece vasto y tu respiración se pausa momentáneamente al contemplar la maravilla.",
                         "description_en": "The world seems vast and your breath pauses momentarily as you contemplate wonder.",
-                        "tip_es": "Quédate en el momento. Escribe o captura lo que estás presenciando.",
-                        "tip_en": "Stay in the moment. Write down or capture what you are witnessing."
                     },
                     "no": {
                         "emotion_es": "Inspiración",
@@ -134,8 +116,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "💡",
                         "description_es": "Sientes una corriente de energía clara que ilumina tu mente y cuerpo.",
                         "description_en": "You feel a clear stream of energy illuminating your mind and body.",
-                        "tip_es": "Anota tus ideas rápidamente antes de que la sensación se desvanezca.",
-                        "tip_en": "Jot down your ideas quickly before the feeling fades."
                     }
                 },
                 "no": {
@@ -147,8 +127,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😂",
                         "description_es": "Tu pecho salta ligeramente y tu rostro no puede evitar sonreír.",
                         "description_en": "Your chest bounces slightly and your face can't help but smile.",
-                        "tip_es": "Deja salir la risa. Ríete a carcajadas sin contenerte.",
-                        "tip_en": "Let the laughter out. Laugh out loud without holding back."
                     },
                     "no": {
                         "emotion_es": "Alegría",
@@ -156,8 +134,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😊",
                         "description_es": "Una ligereza cálida que te hace sentir bien, a gusto y sonriente.",
                         "description_en": "A warm lightness that makes you feel good, at ease, and smiling.",
-                        "tip_es": "Agradece internamente este momento de pura positividad.",
-                        "tip_en": "Give internal thanks for this moment of pure positivity."
                     }
                 }
             },
@@ -173,8 +149,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😌",
                         "description_es": "Te sientes grande físicamente, tus hombros están hacia atrás, reconociendo tu propio valor.",
                         "description_en": "You feel physically large, your shoulders are back, recognizing your own worth.",
-                        "tip_es": "Reconoce tu logro sin compararte con los demás.",
-                        "tip_en": "Acknowledge your achievement without comparing yourself to others."
                     },
                     "no": {
                         "emotion_es": "Gratitud",
@@ -182,8 +156,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🙏",
                         "description_es": "Sientes el pecho abierto y receptivo, una calidez vibrante hacia los demás.",
                         "description_en": "You feel your chest open and receptive, a vibrating warmth toward others.",
-                        "tip_es": "Expresa verbalmente tu agradecimiento a quien corresponda.",
-                        "tip_en": "Verbally express your thanks to whom it may concern."
                     }
                 },
                 "no": {
@@ -195,8 +167,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "👀",
                         "description_es": "Tu cuerpo está alerta pero relajado, esperando que algo ocurra.",
                         "description_en": "Your body is alert but relaxed, waiting for something to happen.",
-                        "tip_es": "Mantén la mente abierta sin crear expectativas demasiado rígidas.",
-                        "tip_en": "Keep an open mind without creating overly rigid expectations."
                     },
                     "no": {
                         "emotion_es": "Esperanza",
@@ -204,8 +174,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🌱",
                         "description_es": "Sientes una ligereza en el pecho que contrarresta pesares anteriores.",
                         "description_en": "You feel a lightness in your chest that counteracts previous sorrows.",
-                        "tip_es": "Aférrate a esta sensación cálida para motivar tus próximos pasos.",
-                        "tip_en": "Hold onto this warm feeling to motivate your next steps."
                     }
                 }
             }
@@ -230,8 +198,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😡",
                         "description_es": "Sientes un fuego destructivo, la sangre hirviendo y necesidad de atacar.",
                         "description_en": "You feel a destructive fire, blood boiling, and a need to attack.",
-                        "tip_es": "Aléjate de la situación, respira profundo o golpea una almohada.",
-                        "tip_en": "Walk away from the situation, take deep breaths, or punch a pillow."
                     },
                     "no": {
                         "emotion_es": "Hostilidad",
@@ -239,8 +205,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😠",
                         "description_es": "Sientes tensión constante y mirada punzante hacia los demás, a la defensiva.",
                         "description_en": "You feel constant tension and a piercing gaze toward others, on the defensive.",
-                        "tip_es": "Observa tu lenguaje corporal y trata de relajar intencionalmente los hombros.",
-                        "tip_en": "Notice your body language and intentionally try to relax your shoulders."
                     }
                 },
                 "no": {
@@ -252,8 +216,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😤",
                         "description_es": "Tu cuerpo se endereza rígidamente al presenciar o vivir algo profundamente injusto.",
                         "description_en": "Your body stiffens rigidly upon witnessing or experiencing something deeply unfair.",
-                        "tip_es": "Canaliza esta energía en acciones justas o expresando tus límites.",
-                        "tip_en": "Channel this energy into just actions or expressing your boundaries."
                     },
                     "no": {
                         "emotion_es": "Resentimiento",
@@ -261,8 +223,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😒",
                         "description_es": "Sientes una quemazón sorda y persistente en el estómago o el pecho recordando ofensas.",
                         "description_en": "You feel a dull, persistent burning in your stomach or chest remembering offenses.",
-                        "tip_es": "Escribe lo que sientes y considera si el perdón es una opción liberadora.",
-                        "tip_en": "Write down how you feel and consider if forgiveness is a freeing option."
                     }
                 }
             },
@@ -279,8 +239,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🤢",
                         "description_es": "Tu nariz se arruga físicamente y tu cuerpo quiere retroceder de la fuente.",
                         "description_en": "Your nose physically wrinkles and your body wants to back away from the source.",
-                        "tip_es": "Alejate físicamente del estímulo. Lávate las manos o la cara.",
-                        "tip_en": "Physically distance yourself from the stimulus. Wash your hands or face."
                     },
                     "no": {
                         "emotion_es": "Frustración",
@@ -288,8 +246,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😫",
                         "description_es": "Sientes tensión como si chocaras contra una pared, apretando los dientes.",
                         "description_en": "You feel tension as if hitting a wall, clenching your teeth.",
-                        "tip_es": "Toma un breve descanso. La terquedad ahora no te servirá.",
-                        "tip_en": "Take a short break. Stubbornness won't serve you right now."
                     }
                 },
                 "no": {
@@ -301,8 +257,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🙄",
                         "description_es": "Cada pequeño sonido o toque te resulta físicamente molesto o punzante.",
                         "description_en": "Every little sound or touch feels physically annoying or piercing to you.",
-                        "tip_es": "Busca un entorno silencioso y minimiza los estímulos externos.",
-                        "tip_en": "Seek a quiet environment and minimize external stimuli."
                     },
                     "no": {
                         "emotion_es": "Envidia",
@@ -310,8 +264,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🤫",
                         "description_es": "Sientes un vacío tenso en el estómago y tu mirada se clava fijamente en lo que otros tienen.",
                         "description_en": "You feel a tense void in your stomach and your gaze fixates on what others have.",
-                        "tip_es": "Redirige tu mirada hacia tus propios logros y el camino que has recorrido.",
-                        "tip_en": "Redirect your gaze to your own achievements and the path you've traveled."
                     }
                 }
             }
@@ -331,8 +283,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😱",
                         "description_es": "Tu sistema nervioso se ha disparado al máximo, hiperventilas y sientes pérdida de control.",
                         "description_en": "Your nervous system has maxed out, you're hyperventilating and feel a loss of control.",
-                        "tip_es": "Encuentra 5 cosas que puedas ver, 4 que puedas tocar, 3 que escuchar (técnica 5-4-3-2-1).",
-                        "tip_en": "Find 5 things you can see, 4 you can touch, 3 you can hear (5-4-3-2-1 grounding technique)."
                     },
                     "no": {
                         "emotion_es": "Miedo",
@@ -340,8 +290,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😨",
                         "description_es": "Tus ojos están muy abiertos, tu cuerpo rígido o temblando, preparándose para el peligro.",
                         "description_en": "Your eyes are wide open, your body rigid or shaking, preparing for danger.",
-                        "tip_es": "Evalúa objetivamente si el peligro es real e inminente en este preciso momento.",
-                        "tip_en": "Objectively evaluate if the danger is real and imminent in this precise moment."
                     }
                 },
                 "no": {
@@ -353,8 +301,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😰",
                         "description_es": "Tu pecho se siente apretado y tu respiración es superficial, como anticipando una amenaza difusa.",
                         "description_en": "Your chest feels tight and your breathing is shallow, anticipating a vague threat.",
-                        "tip_es": "Haz respiraciones diafragmáticas (desde el abdomen) para calmar tu sistema nervioso.",
-                        "tip_en": "Do diaphragmatic breathing (from the belly) to calm your nervous system."
                     },
                     "no": {
                         "emotion_es": "Nerviosismo",
@@ -362,8 +308,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😬",
                         "description_es": "Tienes tics, mueves las manos o pies constantemente, con una agitación superficial.",
                         "description_en": "You have tics, move your hands or feet constantly, with a superficial agitation.",
-                        "tip_es": "Mueve el cuerpo intencionalmente: camina o sacude las extremidades.",
-                        "tip_en": "Move your body intentionally: walk or shake out your limbs."
                     }
                 }
             },
@@ -380,8 +324,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😵",
                         "description_es": "Tus hombros se hunden por el peso invisible y sientes que apenas puedes respirar por la presión.",
                         "description_en": "Your shoulders sag from the invisible weight and you feel you can barely breathe from the pressure.",
-                        "tip_es": "Pausa todo. Haz una sola cosa pequeña y manejable primero.",
-                        "tip_en": "Pause everything. Do just one small, manageable thing first."
                     },
                     "no": {
                         "emotion_es": "Desesperación",
@@ -389,8 +331,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😩",
                         "description_es": "Sientes un dolor agudo en el pecho, como si te desgarraran, luchando sin salida.",
                         "description_en": "You feel sharp pain in your chest, as if being torn apart, struggling with no way out.",
-                        "tip_es": "Pide ayuda inmediatamente. No tienes que cargar con esto en soledad.",
-                        "tip_en": "Ask for help immediately. You don't have to carry this alone."
                     }
                 },
                 "no": {
@@ -402,8 +342,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😔",
                         "description_es": "Tu postura se encoge hacia adentro, como queriendo esconderte, sintiendo un peso interno.",
                         "description_en": "Your posture shrinks inward, as if wanting to hide, feeling an internal weight.",
-                        "tip_es": "Si cometiste un error, asume la responsabilidad e intenta reparar el daño.",
-                        "tip_en": "If you made a mistake, take responsibility and try to repair the damage."
                     },
                     "no": {
                         "emotion_es": "Obsesión",
@@ -411,8 +349,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😵‍💫",
                         "description_es": "Sientes la cabeza caliente y tensa, dando vueltas en bucle físico sobre un solo tema.",
                         "description_en": "You feel your head hot and tense, physically looping on a single subject.",
-                        "tip_es": "Rompe el ciclo cambiando de entorno o sumergiendo tu rostro en agua fría.",
-                        "tip_en": "Break the cycle by changing your environment or splashing cold water on your face."
                     }
                 }
             }
@@ -437,8 +373,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🥀",
                         "description_es": "El cuerpo duele físicamente; sientes espasmos de llanto y un vacío desgarrador.",
                         "description_en": "The body physically aches; you feel crying spasms and a tearing emptiness.",
-                        "tip_es": "El duelo es un proceso corporal. Llora y descansa todo lo que necesites.",
-                        "tip_en": "Grief is a bodily process. Cry and rest as much as you need."
                     },
                     "no": {
                         "emotion_es": "Tristeza",
@@ -446,8 +380,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😢",
                         "description_es": "Tu rostro decae, la mirada se pierde hacia abajo y hay lágrimas contenidas o derramadas.",
                         "description_en": "Your face droops, your gaze is lost downward, and tears are held back or shed.",
-                        "tip_es": "Escribe en un diario o busca el abrazo de alguien querido.",
-                        "tip_en": "Write in a journal or seek a hug from a loved one."
                     }
                 },
                 "no": {
@@ -459,8 +391,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😳",
                         "description_es": "Sientes un calor punzante en la cara y cuello, y encoges los hombros instintivamente.",
                         "description_en": "You feel a piercing heat in your face and neck, and instinctively shrug your shoulders.",
-                        "tip_es": "Recuerda que todos somos vulnerables. Háblalo con alguien de confianza.",
-                        "tip_en": "Remember we are all vulnerable. Talk about it with someone you trust."
                     },
                     "no": {
                         "emotion_es": "Decepción",
@@ -468,8 +398,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😞",
                         "description_es": "Sientes cómo tus hombros y energía caen repentinamente, soltando un suspiro pesado.",
                         "description_en": "You feel your shoulders and energy suddenly drop, releasing a heavy sigh.",
-                        "tip_es": "Acepta que las cosas no salieron como esperabas y ajusta tu rumbo.",
-                        "tip_en": "Accept that things didn't go as expected and adjust your course."
                     }
                 }
             },
@@ -485,8 +413,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🥱",
                         "description_es": "El agotamiento es físico en cada músculo y tus párpados caen sin remedio.",
                         "description_en": "The exhaustion is physical in every muscle and your eyelids droop hopelessly.",
-                        "tip_es": "Tu cuerpo te exige descanso físico profundo. Duerme.",
-                        "tip_en": "Your body demands deep physical rest. Sleep."
                     },
                     "no": {
                         "emotion_es": "Desgana",
@@ -494,8 +420,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😒",
                         "description_es": "Te arrastras para moverte, haciendo las cosas con lentitud y pesadez palpable.",
                         "description_en": "You drag yourself to move, doing things with palpable slowness and heaviness.",
-                        "tip_es": "Haz la tarea más pequeña posible para generar inercia de movimiento.",
-                        "tip_en": "Do the smallest task possible to build momentum."
                     }
                 },
                 "no": {
@@ -507,8 +431,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🌑",
                         "description_es": "Sientes un peso muerto en el pecho; tu mirada está vacía y fija sin enfocar nada.",
                         "description_en": "You feel a dead weight in your chest; your gaze is empty and fixed focusing on nothing.",
-                        "tip_es": "Busca contacto humano. Solo enfócate en sobrevivir el día de hoy.",
-                        "tip_en": "Seek human contact. Just focus on surviving today."
                     },
                     "no": {
                         "emotion_es": "Resignación",
@@ -516,8 +438,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🫥",
                         "description_es": "Sientes una exhalación profunda, los hombros caen, dejando de resistir físicamente.",
                         "description_en": "You feel a deep exhalation, shoulders drop, ceasing physical resistance.",
-                        "tip_es": "La aceptación física te permite dejar de gastar energía inútilmente.",
-                        "tip_en": "Physical acceptance allows you to stop wasting energy pointlessly."
                     }
                 }
             }
@@ -538,8 +458,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "📻",
                         "description_es": "Sientes una punzada dulce pero dolorosa en el corazón recordando olores o imágenes.",
                         "description_en": "You feel a sweet but painful twinge in your heart recalling smells or images.",
-                        "tip_es": "Honra el recuerdo mirando fotos, pero luego vuelve a arraigarte al presente.",
-                        "tip_en": "Honor the memory by looking at photos, but then root yourself back in the present."
                     },
                     "no": {
                         "emotion_es": "Melancolía",
@@ -547,8 +465,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🌧️",
                         "description_es": "Una pesadez difusa y fría que te hace mirar por la ventana con la mirada perdida.",
                         "description_en": "A diffuse, cold heaviness that makes you stare out the window with a lost gaze.",
-                        "tip_es": "Escucha música suave o pinta; canaliza esta sensibilidad artísticamente.",
-                        "tip_en": "Listen to soft music or paint; channel this sensitivity artistically."
                     }
                 },
                 "no": {
@@ -560,8 +476,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "👤",
                         "description_es": "Un frío físico penetrante; sientes tu piel como una barrera que te aísla del mundo.",
                         "description_en": "A piercing physical cold; you feel your skin as a barrier isolating you from the world.",
-                        "tip_es": "Inicia contacto con alguien. Envía un mensaje o ve a un lugar público.",
-                        "tip_en": "Initiate contact with someone. Send a message or go to a public place."
                     },
                     "no": {
                         "emotion_es": "Desamparo",
@@ -569,8 +483,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🏚️",
                         "description_es": "Sientes el cuerpo pequeño, encogido, vulnerable y físicamente desprotegido.",
                         "description_en": "You feel your body small, shrunk, vulnerable, and physically unprotected.",
-                        "tip_es": "Cúbrete con una manta pesada o abraza una almohada. Busca apoyo terapéutico.",
-                        "tip_en": "Cover yourself with a heavy blanket or hug a pillow. Seek therapeutic support."
                     }
                 }
             },
@@ -586,8 +498,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🕳️",
                         "description_es": "Te sientes como un caparazón. Físicamente no logras registrar ninguna sensación interior.",
                         "description_en": "You feel like a shell. Physically you fail to register any inner sensation.",
-                        "tip_es": "Estimula tus sentidos: toca hielo, huele algo fuerte, come algo picante.",
-                        "tip_en": "Stimulate your senses: touch ice, smell something strong, eat something spicy."
                     },
                     "no": {
                         "emotion_es": "Apatía",
@@ -595,8 +505,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😐",
                         "description_es": "Tus músculos están flojos pero apagados; hay una total falta de respuesta facial.",
                         "description_en": "Your muscles are loose but dull; there is a total lack of facial response.",
-                        "tip_es": "Oblígate a hacer 5 minutos de actividad física para activar la circulación.",
-                        "tip_en": "Force yourself to do 5 minutes of physical activity to activate circulation."
                     }
                 },
                 "no": {
@@ -608,8 +516,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🫣",
                         "description_es": "Sientes un ligero temblor en las manos o la voz, y encoges el pecho para protegerte.",
                         "description_en": "You feel a slight tremor in your hands or voice, and shrink your chest to protect yourself.",
-                        "tip_es": "Adopta una 'postura de poder' (pecho abierto, manos en caderas) por 2 minutos.",
-                        "tip_en": "Adopt a 'power pose' (chest open, hands on hips) for 2 minutes."
                     },
                     "no": {
                         "emotion_es": "Aburrimiento",
@@ -617,8 +523,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🥱",
                         "description_es": "Sientes pesadez en los párpados combinada con suspiros frecuentes y cuerpo escurrido.",
                         "description_en": "You feel heaviness in your eyelids combined with frequent sighs and a slouched body.",
-                        "tip_es": "Cambia de actividad o entorno inmediatamente. Busca novedad sensorial.",
-                        "tip_en": "Change activity or environment immediately. Seek sensory novelty."
                     }
                 }
             }
@@ -643,8 +547,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🧘",
                         "description_es": "El aire fluye sin esfuerzo. Tu cuerpo y mente se sienten vastos, claros y en paz cristalina.",
                         "description_en": "Air flows effortlessly. Your body and mind feel vast, clear, and in crystalline peace.",
-                        "tip_es": "Disfruta este estado. Medita o simplemente contempla la quietud.",
-                        "tip_en": "Enjoy this state. Meditate or simply contemplate the stillness."
                     },
                     "no": {
                         "emotion_es": "Paz interior",
@@ -652,8 +554,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🕊️",
                         "description_es": "El pecho se siente cálido y abierto, con una respiración rítmica y suave.",
                         "description_en": "The chest feels warm and open, with rhythmic and soft breathing.",
-                        "tip_es": "Ancla esta sensación en tu memoria corporal para tiempos más estresantes.",
-                        "tip_en": "Anchor this sensation in your body memory for more stressful times."
                     }
                 },
                 "no": {
@@ -665,8 +565,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😮‍💨",
                         "description_es": "Tus hombros bajan drásticamente y dejas salir un suspiro largo e involuntario.",
                         "description_en": "Your shoulders drop drastically and you let out a long, involuntary sigh.",
-                        "tip_es": "Permítete el descanso total ahora que la tensión ha pasado.",
-                        "tip_en": "Allow yourself total rest now that the tension has passed."
                     },
                     "no": {
                         "emotion_es": "Calma",
@@ -674,8 +572,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "😌",
                         "description_es": "Sientes los músculos desenredarse y el ritmo cardíaco se ralentiza suavemente.",
                         "description_en": "You feel your muscles untangle and your heart rate slows down gently.",
-                        "tip_es": "Sigue respirando despacio y mantén movimientos lentos.",
-                        "tip_en": "Keep breathing slowly and maintain slow movements."
                     }
                 }
             },
@@ -691,8 +587,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🛋️",
                         "description_es": "Tus músculos están casi líquidos. La mandíbula, cuello y espalda han soltado toda resistencia.",
                         "description_en": "Your muscles are almost liquid. Jaw, neck, and back have released all resistance.",
-                        "tip_es": "Este es el momento ideal para descansar, estirar o dormir.",
-                        "tip_en": "This is the ideal time to rest, stretch, or sleep."
                     },
                     "no": {
                         "emotion_es": "Comodidad",
@@ -700,8 +594,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "☕",
                         "description_es": "Sientes una suavidad y temperatura agradable envolviendo tu cuerpo.",
                         "description_en": "You feel a pleasant softness and temperature enveloping your body.",
-                        "tip_es": "Sumérgete en este confort físico con una manta o bebida caliente.",
-                        "tip_en": "Immerse yourself in this physical comfort with a blanket or hot drink."
                     }
                 },
                 "no": {
@@ -713,8 +605,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🤔",
                         "description_es": "Tu cuerpo está quieto pero tu mirada observa con atención tranquila y desapegada.",
                         "description_en": "Your body is still but your gaze observes with quiet, detached attention.",
-                        "tip_es": "Deja vagar tu mente y disfruta de los detalles sutiles a tu alrededor.",
-                        "tip_en": "Let your mind wander and enjoy the subtle details around you."
                     },
                     "no": {
                         "emotion_es": "Aceptación",
@@ -722,8 +612,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "👐",
                         "description_es": "Sientes el vientre blando y las palmas abiertas, sin oponer resistencia a la realidad.",
                         "description_en": "You feel a soft belly and open palms, offering no resistance to reality.",
-                        "tip_es": "Fluye con la corriente en lugar de nadar en contra.",
-                        "tip_en": "Flow with the current instead of swimming against it."
                     }
                 }
             }
@@ -744,8 +632,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🥺",
                         "description_es": "Tus ojos se suavizan y tus manos sienten el impulso de acariciar con suma delicadeza.",
                         "description_en": "Your eyes soften and your hands feel the urge to caress with utmost delicacy.",
-                        "tip_es": "Acaricia a tu mascota, abraza a un ser querido o cuida una planta.",
-                        "tip_en": "Pet your animal, hug a loved one, or tend to a plant."
                     },
                     "no": {
                         "emotion_es": "Cariño",
@@ -753,8 +639,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🥰",
                         "description_es": "Sientes un abrazo cálido interno y una suave sonrisa permanente en el rostro.",
                         "description_en": "You feel a warm internal hug and a constant soft smile on your face.",
-                        "tip_es": "Envía un mensaje amoroso a la persona que te hace sentir así.",
-                        "tip_en": "Send a loving message to the person who makes you feel this way."
                     }
                 },
                 "no": {
@@ -766,8 +650,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🌻",
                         "description_es": "Una tibieza reconfortante inunda tu pecho reconociendo lo bueno que te rodea.",
                         "description_en": "A comforting warmth floods your chest acknowledging the good around you.",
-                        "tip_es": "Respira esta sensación profunda y hazla tuya por un momento.",
-                        "tip_en": "Breathe in this deep sensation and make it yours for a moment."
                     },
                     "no": {
                         "emotion_es": "Confianza",
@@ -775,8 +657,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🤝",
                         "description_es": "Tu postura es relajada pero abierta, el vientre desprotegido, sabiendo que estás a salvo.",
                         "description_en": "Your posture is relaxed but open, belly unprotected, knowing you are safe.",
-                        "tip_es": "Apóyate en esta red de seguridad para mostrar tu yo auténtico.",
-                        "tip_en": "Lean into this safety net to show your authentic self."
                     }
                 }
             },
@@ -792,8 +672,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🌕",
                         "description_es": "Sientes que tu cuerpo es un recipiente completo, sin huecos. Estás totalmente saciado.",
                         "description_en": "You feel your body is a full vessel, with no holes. You are totally sated.",
-                        "tip_es": "Guarda este sentimiento de 'suficiente' y siéntete orgulloso de tu camino.",
-                        "tip_en": "Save this feeling of 'enough' and feel proud of your path."
                     },
                     "no": {
                         "emotion_es": "Satisfacción",
@@ -801,8 +679,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "☺️",
                         "description_es": "Tus músculos digieren la experiencia; hay un pequeño asentimiento afirmativo en tu cabeza.",
                         "description_en": "Your muscles digest the experience; there is a small affirmative nod in your head.",
-                        "tip_es": "Tómate un momento para saborear este cierre positivo.",
-                        "tip_en": "Take a moment to savor this positive closure."
                     }
                 },
                 "no": {
@@ -814,8 +690,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🎶",
                         "description_es": "Tu cuerpo se siente como un instrumento afinado, todo fluye sin enganches ni tensiones.",
                         "description_en": "Your body feels like a tuned instrument, everything flows without hitches or tensions.",
-                        "tip_es": "Comparte esta sintonía fluyendo suavemente en tus interacciones.",
-                        "tip_en": "Share this attunement by flowing smoothly in your interactions."
                     },
                     "no": {
                         "emotion_es": "Contento",
@@ -823,8 +697,6 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
                         "emoji": "🙂",
                         "description_es": "Una sonrisa leve y constante en tus labios, y los ojos relajados brillando un poco.",
                         "description_en": "A slight, constant smile on your lips, and relaxed eyes shining a bit.",
-                        "tip_es": "Mantén este estado haciendo pequeñas cosas que te agraden.",
-                        "tip_en": "Maintain this state by doing small things that please you."
                     }
                 }
             }
