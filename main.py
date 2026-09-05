@@ -372,6 +372,11 @@ app, rt = fast_app(
     ),
 )
 
+# Explicit top-level aliases for Vercel ASGI serverless function AST detection
+app = app
+application = app
+handler = app
+
 # ---------------------------------------------------------------------------
 # Internationalization strings
 # ---------------------------------------------------------------------------

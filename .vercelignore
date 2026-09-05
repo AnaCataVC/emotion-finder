@@ -1,0 +1,16 @@
+# Virtual environment and caches
+.venv
+__pycache__
+*.pyc
+
+# Development, tests, and documentation
+tests
+docs
+
+# Training data (trained models are serialized in models/)
+data
+*.csv
+
+# Git metadata
+.git
+.github

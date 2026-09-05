@@ -10,3 +10,9 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from main import app
+
+# Explicit top-level aliases for Vercel ASGI serverless function AST detection
+application = app
+handler = app
+app = app
+
