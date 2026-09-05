@@ -89,14 +89,38 @@ def detect_language(text: str) -> str:
 # Prediction
 # ---------------------------------------------------------------------------
 
-# Minimum confidence threshold to accept a prediction
-_CONFIDENCE_THRESHOLD = 0.35
+# Minimum confidence (max class probability) to accept a prediction, below
+# which it's reported as "uncertain". 0.35 represents a clear margin over
+# the 0.25 random 4-class uniform baseline while accepting nuanced phrasing.
+_CONFIDENCE_THRESHOLD = {"es": 0.35, "en": 0.35}
 
-# Valid quadrant values
-_VALID_QUADRANTS = frozenset({
-    "alta_positiva", "alta_negativa",
-    "baja_positiva", "baja_negativa",
-})
+# Top1-top2 probability gap below which the secondary-emotion-path affordance
+# triggers (offering the runner-up quadrant's tree as an alternate reading).
+_SECONDARY_GAP_THRESHOLD = {"es": 0.40, "en": 0.50}
+
+# Confidence-to-intensity display bucketing
+_INTENSITY_LOW_MAX = {"es": 0.60, "en": 0.60}
+_INTENSITY_MED_MAX = {"es": 0.85, "en": 0.85}
+
+
+def _bucket_intensity(confidence: float, lang: str) -> str:
+    if confidence < _INTENSITY_LOW_MAX[lang]:
+        return "baja"
+    if confidence < _INTENSITY_MED_MAX[lang]:
+        return "media"
+    return "alta"
+
+
+def _find_secondary_quadrant(prob_dict: dict, primary: str, lang: str) -> str | None:
+    ranked = sorted(prob_dict.items(), key=lambda kv: kv[1], reverse=True)
+    if len(ranked) < 2:
+        return None
+    (top1_label, top1_prob), (top2_label, top2_prob) = ranked[0], ranked[1]
+    if top1_label != primary:
+        return None  # defensive: should always match
+    if (top1_prob - top2_prob) < _SECONDARY_GAP_THRESHOLD[lang]:
+        return top2_label
+    return None
 
 
 def predict_quadrant(text: str) -> dict:
@@ -117,6 +141,9 @@ def predict_quadrant(text: str) -> dict:
             - lang: str ('es' or 'en')
             - low_confidence: bool (True if below threshold)
             - probabilities: dict[str, float] (per-class probabilities)
+            - intensity: str | None ('baja'/'media'/'alta', None if uncertain)
+            - secondary_quadrant: str | None (runner-up quadrant when the top-2
+              probabilities are close; None if uncertain or clearly decided)
     """
     _load_models()
 
@@ -129,6 +156,8 @@ def predict_quadrant(text: str) -> dict:
             "lang": "es",
             "low_confidence": True,
             "probabilities": {},
+            "intensity": None,
+            "secondary_quadrant": None,
         }
 
     # Truncate very long inputs
@@ -151,6 +180,8 @@ def predict_quadrant(text: str) -> dict:
             "lang": lang,
             "low_confidence": True,
             "probabilities": {},
+            "intensity": None,
+            "secondary_quadrant": None,
         }
 
     # Predict
@@ -161,13 +192,18 @@ def predict_quadrant(text: str) -> dict:
     prob_dict = {str(cls): round(float(prob), 4) for cls, prob in zip(classes, probabilities)}
     confidence = float(max(probabilities))
 
-    low_confidence = bool(confidence < _CONFIDENCE_THRESHOLD)
+    low_confidence = bool(confidence < _CONFIDENCE_THRESHOLD[lang])
+    primary = str(prediction)
 
     return {
-        "quadrant": str(prediction) if not low_confidence else "uncertain",
+        "quadrant": primary if not low_confidence else "uncertain",
         "confidence": round(confidence, 4),
         "lang": lang,
         "low_confidence": low_confidence,
         "probabilities": prob_dict,
+        "intensity": None if low_confidence else _bucket_intensity(confidence, lang),
+        "secondary_quadrant": (
+            None if low_confidence else _find_secondary_quadrant(prob_dict, primary, lang)
+        ),
     }
 
