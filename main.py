@@ -12,8 +12,9 @@ Usage:
 import os
 from fasthtml.common import *
 
-from decision_tree import get_node, get_tree
+from decision_tree import DECISION_TREES, get_all_emotions, get_node, get_quadrant_emotions, get_tree
 from emotion_matcher import is_confident_match, match_emotion
+from feedback_store import create_feedback_record, get_feedback_store
 from inference import detect_language, predict_quadrant
 
 # ---------------------------------------------------------------------------
@@ -415,6 +416,16 @@ _I18N = {
         "step": "Paso",
         "of": "de",
         "footer_text": "Emotion Finder · Basado en el Modelo Circunflejo del Afecto de Russell",
+        "feedback_prompt": "¿Acertamos con tu emoción?",
+        "feedback_thumbs_up": "👍 Sí, acertaron",
+        "feedback_thumbs_down": "👎 No del todo",
+        "feedback_correct_prompt": "¿Cuál emoción describe mejor lo que sientes?",
+        "feedback_select_emotion": "Selecciona una emoción...",
+        "feedback_or_quadrant": "O selecciona solo el cuadrante:",
+        "feedback_comments_placeholder": "Comentario opcional (máx 150 caracteres)...",
+        "feedback_submit": "Enviar corrección",
+        "feedback_cancel": "Cancelar",
+        "feedback_thanks": "¡Gracias por tu aporte! Tu feedback ayuda a entrenar el algoritmo.",
     },
     "en": {
         "title": "Emotion Finder",
@@ -436,6 +447,16 @@ _I18N = {
         "step": "Step",
         "of": "of",
         "footer_text": "Emotion Finder · Grounded in Russell's Circumplex Model of Affect",
+        "feedback_prompt": "Did we get your emotion right?",
+        "feedback_thumbs_up": "👍 Yes, exactly",
+        "feedback_thumbs_down": "👎 Not quite",
+        "feedback_correct_prompt": "Which emotion best describes how you feel?",
+        "feedback_select_emotion": "Select an emotion...",
+        "feedback_or_quadrant": "Or select just the quadrant:",
+        "feedback_comments_placeholder": "Optional comments (max 150 characters)...",
+        "feedback_submit": "Submit correction",
+        "feedback_cancel": "Cancel",
+        "feedback_thanks": "Thank you! Your feedback helps train the algorithm.",
     },
 }
 
@@ -532,7 +553,7 @@ def _progress_bar(current_step: int, total_steps: int = 5):
 
 
 def _render_question(question_text: str, quadrant: str, path: str, lang: str, step: int,
-                      intensity: str = "", secondary: str = "0"):
+                      intensity: str = "", secondary: str = "0", user_text: str = ""):
     """Helper to render a binary question card with Yes/No HTMX buttons (DRY)."""
     next_yes = f"{path}.yes" if path else "yes"
     next_no = f"{path}.no" if path else "no"
@@ -555,6 +576,7 @@ def _render_question(question_text: str, quadrant: str, path: str, lang: str, st
                         "step": next_step,
                         "intensity": intensity,
                         "secondary": secondary,
+                        "user_text": user_text,
                     },
                     cls="btn-gradient",
                 ),
@@ -570,6 +592,7 @@ def _render_question(question_text: str, quadrant: str, path: str, lang: str, st
                         "step": next_step,
                         "intensity": intensity,
                         "secondary": secondary,
+                        "user_text": user_text,
                     },
                     cls="btn-outline",
                 ),
@@ -639,9 +662,57 @@ def get(lang: str = "es"):
     return _page_shell(content, lang)
 
 
+def _render_feedback_widget(user_text: str, lang: str, quadrant: str, emotion: str):
+    """Render the initial inline thumbs-up / thumbs-down feedback buttons."""
+    if not user_text or len(user_text.strip()) < 2:
+        return None
+
+    return Div(
+        P(
+            t("feedback_prompt", lang),
+            style="font-size: 0.95rem; font-weight: 600; color: var(--pico-muted-color); margin-bottom: 0.6rem;",
+        ),
+        Div(
+            Button(
+                t("feedback_thumbs_up", lang),
+                hx_post="/feedback",
+                hx_target="#feedback-container",
+                hx_swap="innerHTML transition:true",
+                hx_vals={
+                    "user_text": user_text,
+                    "lang": lang,
+                    "quadrant": quadrant,
+                    "emotion": emotion,
+                    "rating": "positive",
+                },
+                cls="btn-outline",
+                style="padding: 0.45rem 1.1rem; font-size: 0.9rem;",
+            ),
+            Button(
+                t("feedback_thumbs_down", lang),
+                hx_post="/feedback-form",
+                hx_target="#feedback-container",
+                hx_swap="innerHTML transition:true",
+                hx_vals={
+                    "user_text": user_text,
+                    "lang": lang,
+                    "quadrant": quadrant,
+                    "emotion": emotion,
+                },
+                cls="btn-outline",
+                style="padding: 0.45rem 1.1rem; font-size: 0.9rem;",
+            ),
+            style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;",
+        ),
+        id="feedback-container",
+        style="margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid rgba(123, 64, 212, 0.15);",
+    )
+
+
 def _render_emotion_result(node: dict, quadrant: str, lang: str,
                             intensity: str = "", secondary: str = "0",
-                            manual_explore_path: str | None = None):
+                            manual_explore_path: str | None = None,
+                            user_text: str = ""):
     """Render a leaf emotion node (name, emoji, description) as the final result card."""
     emotion_key = f"emotion_{lang}"
     desc_key = f"description_{lang}"
@@ -671,9 +742,12 @@ def _render_emotion_result(node: dict, quadrant: str, lang: str,
                 "step": "2",
                 "intensity": intensity,
                 "secondary": secondary,
+                "user_text": user_text,
             },
             cls="btn-outline",
         )
+
+    feedback_block = _render_feedback_widget(user_text, lang, quadrant, emotion_name)
 
     return Article(
         _progress_bar(current_step=5, total_steps=5),
@@ -694,6 +768,7 @@ def _render_emotion_result(node: dict, quadrant: str, lang: str,
                 *((manual_explore_button,) if manual_explore_button else ()),
                 style="margin-top: 1.5rem; display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;",
             ),
+            *((feedback_block,) if feedback_block else ()),
             cls="emotion-result-box",
         ),
         cls="brand-card",
@@ -749,6 +824,7 @@ def predict_route(text: str, lang: str = "es"):
                     "step": "2",
                     "intensity": intensity,
                     "secondary": "1",
+                    "user_text": text,
                 },
                 cls="btn-outline",
             ),
@@ -766,7 +842,7 @@ def predict_route(text: str, lang: str = "es"):
             return Div(
                 _render_emotion_result(
                     node, quadrant, lang, intensity=intensity,
-                    manual_explore_path="",
+                    manual_explore_path="", user_text=text,
                 ),
                 *extra_blocks,
             )
@@ -786,6 +862,7 @@ def predict_route(text: str, lang: str = "es"):
             lang=lang,
             step=2,
             intensity=intensity,
+            user_text=text,
         ),
         *extra_blocks,
     )
@@ -793,7 +870,7 @@ def predict_route(text: str, lang: str = "es"):
 
 @app.post("/tree")
 def tree_route(quadrant: str, path: str, lang: str = "es", step: str = "3",
-               intensity: str = "", secondary: str = "0"):
+               intensity: str = "", secondary: str = "0", user_text: str = ""):
     """Navigate binary decision tree and render next question or final emotion."""
     if lang not in ("es", "en"):
         lang = "es"
@@ -810,7 +887,10 @@ def tree_route(quadrant: str, path: str, lang: str = "es", step: str = "3",
 
     # Leaf node reached (Emotion detected)
     if "emotion_es" in node:
-        return _render_emotion_result(node, quadrant, lang, intensity=intensity, secondary=secondary)
+        return _render_emotion_result(
+            node, quadrant, lang, intensity=intensity, secondary=secondary,
+            user_text=user_text
+        )
 
     # Intermediate question node
     question_key = f"question_{lang}"
@@ -824,7 +904,188 @@ def tree_route(quadrant: str, path: str, lang: str = "es", step: str = "3",
         step=current_step,
         intensity=intensity,
         secondary=secondary,
+        user_text=user_text,
     )
+
+
+# ---------------------------------------------------------------------------
+# Feedback & Active Learning Routes
+# ---------------------------------------------------------------------------
+
+
+@app.post("/feedback")
+def feedback_route(
+    user_text: str = "",
+    lang: str = "es",
+    quadrant: str = "",
+    emotion: str = "",
+    rating: str = "positive",
+    corrected_quadrant: str = "",
+    corrected_emotion: str = "",
+    comments: str = "",
+    hp_confirm: str = "",
+):
+    """Receive and securely persist user feedback with anti-bot and fail-open defenses."""
+    if lang not in ("es", "en"):
+        lang = "es"
+
+    # Anti-bot honeypot defense: silent fake OK
+    if hp_confirm:
+        return Div(
+            P(f"✨ {t('feedback_thanks', lang)}",
+              style="color: var(--brand-violet); font-weight: 600; font-size: 0.95rem; margin: 0.5rem 0;"),
+            style="text-align: center;",
+        )
+
+    clean_text = (user_text or "").strip()
+    if not clean_text or len(clean_text) < 2:
+        return Div(
+            P(f"✨ {t('feedback_thanks', lang)}",
+              style="color: var(--brand-violet); font-weight: 600; font-size: 0.95rem; margin: 0.5rem 0;"),
+            style="text-align: center;",
+        )
+
+    clean_text = clean_text[:300]
+    clean_comments = (comments or "").strip()[:150] if comments else None
+
+    # Resolve canonical quadrant: specific emotion takes precedence over radio button
+    final_corrected_quad = None
+    if corrected_emotion:
+        for q_key in ["alta_positiva", "alta_negativa", "baja_positiva", "baja_negativa"]:
+            for e in get_quadrant_emotions(q_key):
+                if e.get("emotion_es") == corrected_emotion or e.get("emotion_en") == corrected_emotion:
+                    final_corrected_quad = q_key
+                    break
+            if final_corrected_quad:
+                break
+    if not final_corrected_quad and corrected_quadrant in ["alta_positiva", "alta_negativa", "baja_positiva", "baja_negativa"]:
+        final_corrected_quad = corrected_quadrant
+
+    record = create_feedback_record(
+        user_text=clean_text,
+        detected_lang=lang,
+        predicted_quadrant=quadrant,
+        predicted_emotion=emotion,
+        model_confidence=1.0,
+        rating=rating,
+        corrected_quadrant=final_corrected_quad,
+        corrected_emotion=corrected_emotion if corrected_emotion else None,
+        comments=clean_comments,
+    )
+
+    store = get_feedback_store()
+    store.save(record)
+
+    return Div(
+        P(
+            f"✨ {t('feedback_thanks', lang)}",
+            style="color: var(--brand-violet); font-weight: 600; font-size: 0.95rem; margin: 0.5rem 0;",
+        ),
+        style="text-align: center;",
+    )
+
+
+@app.post("/feedback-form")
+def feedback_form_route(user_text: str, lang: str = "es", quadrant: str = "", emotion: str = ""):
+    """Render the expanded corrective feedback form via HTMX."""
+    if lang not in ("es", "en"):
+        lang = "es"
+
+    optgroups = []
+    for q_key in ["alta_positiva", "alta_negativa", "baja_positiva", "baja_negativa"]:
+        q_label = _QUADRANT_LABELS.get(lang, {}).get(q_key, q_key)
+        emotions = get_quadrant_emotions(q_key)
+        options = [
+            Option(
+                f"{e.get('emoji', '')} {e.get(f'emotion_{lang}', e.get('emotion_es', ''))}",
+                value=e.get(f"emotion_{lang}", e.get("emotion_es", "")),
+            )
+            for e in emotions
+        ]
+        optgroups.append(Optgroup(*options, label=q_label))
+
+    emotion_select = Select(
+        Option(t("feedback_select_emotion", lang), value="", selected=True, disabled=True),
+        *optgroups,
+        name="corrected_emotion",
+        id="corrected-emotion-select",
+        style="border-radius: 12px; margin-bottom: 0.75rem;",
+    )
+
+    quad_radios = [
+        Label(
+            Input(type="radio", name="corrected_quadrant", value=q_key),
+            f" {_QUADRANT_LABELS.get(lang, {}).get(q_key, q_key)}",
+            style="display: inline-flex; align-items: center; margin-right: 1rem; font-size: 0.85rem;",
+        )
+        for q_key in ["alta_positiva", "alta_negativa", "baja_positiva", "baja_negativa"]
+    ]
+
+    return Div(
+        Form(
+            # Honeypot field (anti-bot)
+            Input(type="text", name="hp_confirm", style="display:none !important;", tabindex="-1", autocomplete="off"),
+            # Context fields
+            Input(type="hidden", name="user_text", value=user_text),
+            Input(type="hidden", name="lang", value=lang),
+            Input(type="hidden", name="quadrant", value=quadrant),
+            Input(type="hidden", name="emotion", value=emotion),
+            Input(type="hidden", name="rating", value="negative"),
+
+            P(t("feedback_correct_prompt", lang), style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; text-align: left;"),
+            emotion_select,
+
+            P(Small(t("feedback_or_quadrant", lang)), style="color: var(--pico-muted-color); margin-bottom: 0.35rem; text-align: left;"),
+            Div(*quad_radios, style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; justify-content: flex-start;"),
+
+            Input(
+                type="text",
+                name="comments",
+                placeholder=t("feedback_comments_placeholder", lang),
+                maxlength="150",
+                style="border-radius: 12px; font-size: 0.9rem; margin-bottom: 1rem;",
+            ),
+
+            Div(
+                Button(
+                    t("feedback_submit", lang),
+                    type="submit",
+                    cls="btn-gradient",
+                    style="padding: 0.5rem 1.25rem; font-size: 0.9rem;",
+                ),
+                Button(
+                    t("feedback_cancel", lang),
+                    hx_post="/feedback-reset",
+                    hx_target="#feedback-container",
+                    hx_swap="innerHTML transition:true",
+                    hx_vals={
+                        "user_text": user_text,
+                        "lang": lang,
+                        "quadrant": quadrant,
+                        "emotion": emotion,
+                    },
+                    cls="btn-outline",
+                    style="padding: 0.5rem 1.25rem; font-size: 0.9rem;",
+                ),
+                style="display: flex; gap: 0.75rem; justify-content: center;",
+            ),
+            hx_post="/feedback",
+            hx_target="#feedback-container",
+            hx_swap="innerHTML transition:true",
+            style="max-width: 520px; margin: 0 auto; text-align: center;",
+        ),
+        id="feedback-container",
+        style="margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid rgba(123, 64, 212, 0.15);",
+    )
+
+
+@app.post("/feedback-reset")
+def feedback_reset_route(user_text: str, lang: str = "es", quadrant: str = "", emotion: str = ""):
+    """Reset back to initial thumbs-up / thumbs-down buttons if user cancels."""
+    if lang not in ("es", "en"):
+        lang = "es"
+    widget = _render_feedback_widget(user_text, lang, quadrant, emotion)
+    return widget or Div(id="feedback-container")
 
 
 # ---------------------------------------------------------------------------

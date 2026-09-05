@@ -24,12 +24,13 @@
 ### 📌 Project Overview
 **Emotion Finder** is an interactive, bilingual web application engineered to bridge the gap between vague somatic/mental sensations and emotional self-awareness. 
 
-Instead of forcing users to guess abstract psychological labels from an overwhelming drop-down list, Emotion Finder employs a three-stage hybrid architecture:
+Instead of forcing users to guess abstract psychological labels from an overwhelming drop-down list, Emotion Finder employs a multi-stage hybrid architecture:
 1. **Affective NLP Classifier**: Maps freeform natural language descriptions of physical and cognitive sensations into one of the 4 quadrants of **Russell's Circumplex Model of Affect** (Activation/Arousal $\times$ Valence).
 2. **Semantic Emotion Matcher**: Ranks the quadrant's 16 emotions by TF-IDF cosine similarity between the user's own words and each emotion's description, jumping straight to a confident match instead of always asking generic sensation questions.
 3. **Binary Somatic Decision Tree (fallback)**: When no match is confident enough, guides the user through an interactive 4-step sequence of body-focused Yes/No questions to pinpoint **1 of 64 precise emotions** (16 per quadrant) — always reachable manually from a direct match too, for users who want to refine it.
 4. **Empathetic Emotional Clarity**: Concludes with a focused card presenting exclusively the identified emotion, its visual archetype, and an empathetic, introspective definition to facilitate emotional clarity.
 5. **Hypermedia-Driven Architecture (FastHTML + HTMX)**: Delivers smooth, SPA-like partial DOM transitions rendered entirely in server-side Python with zero client-side JavaScript build steps.
+6. **Human-in-the-Loop Feedback & Active Learning Loop**: Empowers users to validate or correct detected emotions directly on the leaf card. High-signal user corrections are safely persisted across serverless environments and incorporated into a quality-gated batch retraining pipeline.
 
 ---
 
@@ -81,6 +82,32 @@ Instead of forcing users to guess abstract psychological labels from an overwhel
                        Final Emotion Result Card
        (Identified Emotion + Representative Emoji + Empathetic Definition)
      (a confident match also offers a manual "explore with questions" escape hatch)
+                                            │
+                                            ▼
+                    Interactive Feedback Collection (HTMX)
+                         [👍 Exactly]      [👎 Not quite]
+                                                │
+                                                ▼
+                                  Corrective Form (Taxonomy Select)
+                                                │
+                                                ▼
+                        Decoupled Storage Layer (feedback_store.py)
+                  ┌─────────────────────────────┼─────────────────────────────┐
+                  ▼                             ▼                             ▼
+        Local SQLite DB                Turso LibSQL (HTTP)            NullStore (Fallback)
+        (data/feedback.db)            (Vercel Serverless)            (Read-only fail-open)
+                  │                             │
+                  └─────────────────────────────┘
+                                │
+                                ▼
+                Batch Active Learning Pipeline (scripts/retrain_from_feedback.py)
+                ├─ Deduplication & Text Quality Filters (6–300 chars)
+                ├─ 10% Maximum Sample Cap (Data poisoning defense)
+                ├─ 5-Fold Stratified Cross-Validation (Macro F1 >= 0.95)
+                └─ Mandatory Dialectal Regression Probes Gate (100% Pass)
+                                │
+                                ▼
+                    Updated Model Artifacts (models/model_{lang}.joblib)
 ```
 
 ---
@@ -173,6 +200,18 @@ Emotion Finder addresses this through **affective functional mapping** rather th
 - **Global Scope Singleton Pattern**: Models are loaded lazily into module globals (`inference.py`), persisting across warm AWS Lambda / Vercel microVM invocations.
 - **Serialization Isolation**: Tokenizer functions (`tokenize_es`, `tokenize_en`, `strip_accents`) are isolated into an independent `preprocessing.py` module, ensuring that joblib unpickling succeeds seamlessly across training, testing, and Vercel ASGI execution contexts without namespace shadowing.
 
+#### 7. Human-in-the-Loop Feedback & Serverless Active Learning Loop
+- **Zero-Dependency Serverless Persistence (`feedback_store.py`)**: Because Emotion Finder runs on Vercel Serverless with an ephemeral, read-only filesystem (`/var/task`), writing directly to local SQLite files in production triggers runtime exceptions or loses state on cold restart. We implemented a decoupled storage repository pattern supporting three distinct environments:
+  1. `LocalSQLiteFeedbackStore`: Manages local development and CI testing (`data/feedback.db` or `:memory:`) with indexed normalized text and status lookups.
+  2. `TursoHttpFeedbackStore`: Serverless production client targeting Turso LibSQL Pipeline API (`/v2/pipeline`), strictly implemented using Python's standard library `urllib.request` (zero extra dependencies in `requirements.txt`, <200ms cold start overhead) with a strict 1.8-second fail-open timeout.
+  3. `NullFeedbackStore`: Fail-open graceful degradation fallback that safely logs feedback events in memory when remote database credentials are omitted, preventing unhandled 500 errors.
+- **Resilience Against Data Poisoning & Drift (`scripts/retrain_from_feedback.py`)**: Naive online learning on public endpoints exposes models to adversarial attacks (e.g., trolls submitting inverted labels) and catastrophic forgetting. The batch retraining pipeline enforces four strict defense layers:
+  1. **Strict 10% Safety Cap**: Feedback samples are capped at a maximum of 10% of the baseline training dataset volume (max 70 samples against 700 baseline rows).
+  2. **Deduplication & Length Gating**: User texts under 6 characters or over 300 characters are rejected, and inputs are deduplicated by lowercased normalized string.
+  3. **Cross-Validation Quality Gate**: Candidate models must sustain Stratified 5-Fold Cross-Validation Macro $F_1 \ge 0.95$.
+  4. **Non-Negotiable Dialectal Regression Probes Gate**: Retrained candidate pipelines must achieve 100% accuracy on the dialectal `REGRESSION_PROBES` suite (Chilean and British idioms). If a single probe fails, the candidate artifact is rejected immediately.
+- **Anti-Bot & UI Honeypot Defense**: An invisible honeypot input (`hp_confirm`) silently intercepts automated crawlers without persisting spam, while preserving full user input text across multi-step somatic navigation.
+
 ---
 
 ### 🚀 Local Setup & Installation
@@ -209,19 +248,34 @@ pip install -r requirements.txt
 ```
 
 #### 4. Run the automated test suite
-Verify that ML pipelines, dialectal mappings, edge cases, decision trees, and routes pass:
+Verify ML pipelines, dialectal mappings, decision trees, HTMX endpoints, and the feedback subsystem:
 ```bash
+# Run the complete test suite (100% passing)
+pytest
+
+# Or execute individual test modules
 python tests/test_pipeline.py
+pytest tests/test_feedback.py
 ```
-*(All assertions should pass with 100% success).*
 
-#### 5. (Optional) Re-train the classification models
+#### 5. Active learning batch retraining (Optional)
+Evaluate and retrain models incorporating verified user feedback under strict quality gates:
 ```bash
-python train_model.py
-```
-This trains both `models/model_es.joblib` and `models/model_en.joblib` using stratified cross-validation.
+# Validate candidate retrain in dry-run mode (evaluates gates without overwriting models)
+python scripts/retrain_from_feedback.py --dry-run
 
-#### 6. Start the development server
+# Execute retrain and update models when quality gates pass
+python scripts/retrain_from_feedback.py --lang all
+```
+
+#### 6. (Optional) Production Vercel Turso configuration
+To enable remote feedback persistence on Vercel Serverless, configure Turso LibSQL environment variables (if omitted, the system gracefully defaults to `NullFeedbackStore` fail-open mode):
+```bash
+export TURSO_DATABASE_URL="libsql://your-database.turso.io"
+export TURSO_AUTH_TOKEN="your-turso-auth-token"
+```
+
+#### 7. Start the development server
 ```bash
 python main.py
 ```
@@ -235,12 +289,13 @@ Open your browser and navigate to **[http://localhost:5001](http://localhost:500
 ### 📌 Descripción del Proyecto
 **Emotion Finder** es una aplicación web interactiva y bilingüe diseñada para transformar sensaciones físicas y estados mentales difusos en autoconocimiento emocional preciso.
 
-En lugar de obligar al usuario a elegir etiquetas psicológicas abstractas de una lista abrumadora, Emotion Finder implementa una arquitectura híbrida de tres etapas:
+En lugar de obligar al usuario a elegir etiquetas psicológicas abstractas de una lista abrumadora, Emotion Finder implementa una arquitectura híbrida de varias etapas:
 1. **Clasificador NLP de Afecto**: Mapea descripciones en lenguaje natural sobre sensaciones físicas y cognitivas en uno de los 4 cuadrantes del **Modelo Circunflejo del Afecto de Russell** (Activación $\times$ Valencia).
 2. **Matcher Semántico de Emoción**: Ordena las 16 emociones del cuadrante por similitud coseno TF-IDF entre las propias palabras del usuario y la descripción de cada emoción, saltando directo a un match confiable en vez de preguntar siempre lo mismo.
 3. **Árbol de Decisión Somático Binario (respaldo)**: Cuando ningún match es suficientemente confiable, guía al usuario a través de una secuencia interactiva de 4 preguntas corporales de Sí/No para identificar **1 de 64 emociones precisas** (16 por cuadrante) — también accesible manualmente desde un match directo, para quien prefiera refinarlo.
 4. **Claridad Emocional Empática**: Concluye en una tarjeta enfocada que presenta exclusivamente la emoción identificada, su emoji representativo y una definición empática e introspectiva orientada a facilitar la comprensión emocional.
 5. **Arquitectura Hypermedia (FastHTML + HTMX)**: Brinda transiciones de página suaves y reactivas tipo SPA renderizadas 100% en Python del lado del servidor, sin dependencias de compilación ni frameworks pesados de JavaScript.
+6. **Bucle de Feedback y Aprendizaje Activo (HITL)**: Permite a los usuarios validar o corregir la emoción detectada directamente en la tarjeta de resultado. Las correcciones se persisten de forma desacoplada y alimentan un pipeline de reentrenamiento por lotes con compuertas estrictas de calidad.
 
 ---
 
@@ -292,6 +347,32 @@ En lugar de obligar al usuario a elegir etiquetas psicológicas abstractas de un
                       Tarjeta de Resultado Emocional
         (Emoción Identificada + Emoji Representativo + Definición Empática)
    (un match confiable también ofrece explorar manualmente con preguntas)
+                                            │
+                                            ▼
+                   Recolección Interactiva de Feedback (HTMX)
+                         [👍 Acertaron]    [👎 No del todo]
+                                                │
+                                                ▼
+                              Formulario de Corrección (Taxonomía 64)
+                                                │
+                                                ▼
+                       Capa de Persistencia Desacoplada (feedback_store.py)
+                 ┌─────────────────────────────┼─────────────────────────────┐
+                 ▼                             ▼                             ▼
+        SQLite Local (Dev)            Turso LibSQL (HTTP)           NullStore (Fallback)
+        (data/feedback.db)            (Vercel Serverless)           (Fail-open seguro)
+                 │                             │
+                 └─────────────────────────────┘
+                               │
+                               ▼
+               Pipeline de Aprendizaje Activo (scripts/retrain_from_feedback.py)
+               ├─ Filtros de Calidad y Deduplicación (6–300 caracteres)
+               ├─ Límite de Ingesta del 10% (Defensa contra envenenamiento)
+               ├─ Validación Cruzada Estratificada 5-Fold (Macro F1 >= 0.95)
+               └─ Compuerta Obligatoria de Modismos (REGRESSION_PROBES 100%)
+                               │
+                               ▼
+                   Artefactos de Modelo Actualizados (models/model_{lang}.joblib)
 ```
 
 ---
@@ -306,6 +387,25 @@ El Modelo Circunflejo de Russell postula que las emociones se ubican en un espac
 | **Alta Negativa (`alta_negativa`)** | $-$ | $+$ | Pecho ocre, mandíbula tensa, respiración agitada, temblor, reactividad | 16 | Furia, Ira, Pánico, Terror, Ansiedad, Frustración, Hostilidad, Agobio... |
 | **Baja Negativa (`baja_negativa`)** | $-$ | $-$ | Pesadez muscular, postura encorvada, lentitud motora, vacío en el estómago | 16 | Tristeza profunda, Melancolía, Desolación, Duelo, Apatía, Fatiga, Vacío... |
 | **Baja Positiva (`baja_positiva`)** | $+$ | $-$ | Respiración lenta y profunda, distensión muscular, calma sosegada | 16 | Serenidad, Paz interior, Calma, Alivio, Satisfacción, Armonía, Confianza... |
+
+```
+Recorrido en Árbol Binario (Profundidad 4 = 16 Hojas por Cuadrante):
+Paso 1: Pregunta Raíz (Línea base somática)
+ ├── Sí ──> Paso 2: Discriminador fisiológico de alta intensidad
+ │           ├── Sí ──> Paso 3: Discriminador de foco específico
+ │           │           ├── Sí ──> Paso 4 ──> [Hoja A] o [Hoja B]
+ │           │           └── No  ──> Paso 4 ──> [Hoja C] o [Hoja D]
+ │           └── No  ──> Paso 3: Discriminador visceral secundario
+ │                        ├── Sí ──> Paso 4 ──> [Hoja E] o [Hoja F]
+ │                        └── No  ──> Paso 4 ──> [Hoja G] o [Hoja H]
+ └── No  ──> Paso 2: Discriminador difuso o moderado
+              ├── Sí ──> Paso 3: Discriminador cognitivo / relacional
+              │           ├── Sí ──> Paso 4 ──> [Hoja I] o [Hoja J]
+              │           └── No  ──> Paso 4 ──> [Hoja K] o [Hoja L]
+              └── No  ──> Paso 3: Discriminador de impulso atenuado
+                           ├── Sí ──> Paso 4 ──> [Hoja M] o [Hoja N]
+                           └── No  ──> Paso 4 ──> [Hoja O] o [Hoja P]
+```
 
 ---
 
@@ -365,6 +465,18 @@ Emotion Finder resuelve esto implementando un **mapeo funcional afectivo** en lu
 - **Patrón Singleton a Nivel de Módulo**: Los modelos se cargan de forma perezosa en variables globales del módulo (`inference.py`), manteniéndose en memoria durante invocaciones calientes sucesivas.
 - **Aislamiento de Serialización**: Las funciones de tokenización se ubicaron en `preprocessing.py`, garantizando que joblib pueda deserializar los pipelines sin fallos de importación cruzada en el entorno serverless de Vercel.
 
+#### 7. Feedback Human-in-the-Loop y Aprendizaje Activo Serverless
+- **Persistencia Serverless con Cero Dependencias (`feedback_store.py`)**: El entorno serverless de Vercel opera con un sistema de archivos efímero y de solo lectura (`/var/task`). Intentar escribir directamente en un archivo SQLite local en producción causa excepciones en tiempo de ejecución o pérdida de datos tras el reciclaje de microVMs. Diseñamos un patrón de repositorio desacoplado con tres adaptadores:
+  1. `LocalSQLiteFeedbackStore`: Para desarrollo local y pruebas (`data/feedback.db` o `:memory:`) con índices en texto normalizado y estado.
+  2. `TursoHttpFeedbackStore`: Conector ligero para Turso LibSQL Pipeline API (`/v2/pipeline`), implementado exclusivamente mediante la biblioteca estándar de Python (`urllib.request`, sin inflar `requirements.txt` y con arranques en frío <200ms) y un timeout de 1.8 segundos con comportamiento fail-open.
+  3. `NullFeedbackStore`: Fallback de degradación elegante que registra los eventos de feedback en memoria cuando no hay credenciales remotas, asegurando que la UI responda con éxito y jamás arroje un error 500.
+- **Protección contra Envenenamiento de Datos y Deriva (`scripts/retrain_from_feedback.py`)**: El aprendizaje continuo en tiempo real sobre endpoints públicos expone el modelo a ataques de envenenamiento y olvido catastrófico. El pipeline de reentrenamiento por lotes implementa cuatro barreras defensivas:
+  1. **Tope de Seguridad del 10%**: Las muestras de feedback no pueden superar el 10% del tamaño del dataset base canónico (máximo 70 muestras sobre las 700 sintéticas).
+  2. **Deduplicación y Filtrado de Longitud**: Se descartan textos con longitud menor a 6 o mayor a 300 caracteres, unificando duplicados por hash normalizado.
+  3. **Compuerta de Validación Cruzada**: El modelo candidato debe alcanzar un Macro $F_1 \ge 0.95$ en 5-Fold Stratified CV.
+  4. **Compuerta Inviolable de Modismos (`REGRESSION_PROBES`)**: El modelo candidato debe superar con un 100% de precisión la suite de pruebas de modismos chilenos y británicos. Si un solo modismo falla, el modelo es rechazado automáticamente.
+- **Defensa Anti-Bot mediante Honeypot**: Un campo oculto invisible (`hp_confirm`) intercepta scripts automatizados y descarta el spam silenciosamente sin penalizar la experiencia de usuario.
+
 ---
 
 ### 🚀 Instalación y Uso Local
@@ -387,13 +499,25 @@ source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# 4. Ejecutar pruebas automatizadas
+# 4. Ejecutar pruebas automatizadas (100% pasando)
+pytest
+
+# O ejecutar suites individuales
 python tests/test_pipeline.py
+pytest tests/test_feedback.py
 
-# 5. (Opcional) Reentrenar modelos
-python train_model.py
+# 5. Reentrenamiento por lotes con aprendizaje activo (Opcional)
+# Modo dry-run (evalúa compuertas sin sobreescribir modelos en disco)
+python scripts/retrain_from_feedback.py --dry-run
 
-# 6. Iniciar servidor de desarrollo
+# Reentrenar e incorporar feedback verificado si pasa todas las compuertas
+python scripts/retrain_from_feedback.py --lang all
+
+# 6. (Opcional) Configuración de Turso en Vercel
+export TURSO_DATABASE_URL="libsql://your-database.turso.io"
+export TURSO_AUTH_TOKEN="your-turso-auth-token"
+
+# 7. Iniciar servidor de desarrollo
 python main.py
 ```
 Abre tu navegador en **[http://localhost:5001](http://localhost:5001)**.
@@ -404,12 +528,15 @@ Abre tu navegador en **[http://localhost:5001](http://localhost:5001)**.
 
 ```
 emotion-finder/
-├── main.py                  # FastHTML web app (routes, UI components, HTMX swaps)
+├── main.py                  # FastHTML web app (routes, UI components, HTMX feedback widget)
 ├── inference.py             # ML inference module & language routing heuristic
 ├── emotion_matcher.py       # TF-IDF cosine-similarity direct emotion matcher
+├── feedback_store.py        # Decoupled feedback persistence (SQLite, Turso HTTP, NullStore)
 ├── preprocessing.py         # Stemming tokenizers & unicode accent normalization
 ├── decision_tree.py         # 64-emotion bilingual binary decision tree structure
 ├── train_model.py           # scikit-learn training script (TF-IDF + LogisticRegression)
+├── scripts/
+│   └── retrain_from_feedback.py # Batch active learning retraining pipeline with quality gates
 ├── api/
 │   └── index.py             # Serverless ASGI entrypoint for Vercel deployment
 ├── data/
@@ -421,14 +548,17 @@ emotion-finder/
 │   ├── model_es.joblib      # Compressed Spanish pipeline (~27 KB)
 │   └── model_en.joblib      # Compressed English pipeline (~27 KB)
 ├── tests/
-│   └── test_pipeline.py     # Automated test suite (NLP, edge cases, tree topology, web app)
+│   ├── test_pipeline.py     # NLP classifications, dialectal idioms, tree topology, web app
+│   └── test_feedback.py     # Feedback storage, HTMX routes, honeypot, active learning gates
 ├── docs/
 │   ├── external-references/ # Technical research & architecture references
-│   │   ├── dialectal-idioms-affective-mapping.md # Chilean & British idioms mapping
-│   │   ├── fasthtml-stack.md                 # FastHTML & Vercel serverless notes
-│   │   └── ml-emotion-pipeline.md            # Pipeline architecture & benchmarks
+│   │   ├── active-learning-feedback-loop.md          # HITL active learning & serverless notes
+│   │   ├── dialectal-idioms-affective-mapping.md     # Chilean & British idioms mapping
+│   │   ├── fasthtml-stack.md                         # FastHTML & Vercel serverless notes
+│   │   ├── feedback-active-learning-stress-test.md   # Adversarial stress-test report
+│   │   └── ml-emotion-pipeline.md                    # Pipeline architecture & benchmarks
 │   └── learning/            # Post-audit architectural lessons & learnings
-│       └── adversarial-audit-lessons.md      # Adversarial review learnings & insights
+│       └── adversarial-audit-lessons.md              # Adversarial review learnings & insights
 ├── requirements.txt         # Production runtime dependencies
 ├── requirements-dev.txt     # Development & training dependencies
 ├── vercel.json              # Vercel serverless build & routing configuration
