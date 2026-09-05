@@ -85,7 +85,7 @@ def extract_training_samples(records: List[FeedbackRecord], lang: str) -> List[T
     return samples
 
 
-def retrain_language(lang: str, store: FeedbackStore, dry_run: bool = False) -> bool:
+def retrain_language(lang: str, store: FeedbackStore, dry_run: bool = False, include_pending: bool = False) -> bool:
     """
     Execute protected batch retraining for a specific language.
 
@@ -105,10 +105,15 @@ def retrain_language(lang: str, store: FeedbackStore, dry_run: bool = False) -> 
     base_count = len(base_texts)
     logger.info("Loaded %d canonical samples from %s", base_count, csv_name)
 
-    # 2. Ingest verified feedback
-    verified_records = store.get_by_status("verified", limit=500)
-    feedback_samples = extract_training_samples(verified_records, lang)
-    logger.info("Found %d valid verified feedback samples for '%s'", len(feedback_samples), lang)
+    # 2. Ingest feedback records
+    records = store.get_by_status("verified", limit=500)
+    if include_pending:
+        pending = store.get_by_status("pending", limit=500)
+        known_ids = {r.id for r in records}
+        records += [r for r in pending if r.id not in known_ids]
+
+    feedback_samples = extract_training_samples(records, lang)
+    logger.info("Found %d valid feedback samples for '%s'", len(feedback_samples), lang)
 
     # Enforce 10% sample cap
     max_allowed = int(base_count * _MAX_FEEDBACK_RATIO)
@@ -186,6 +191,7 @@ def retrain_language(lang: str, store: FeedbackStore, dry_run: bool = False) -> 
 def main():
     parser = argparse.ArgumentParser(description="Active learning batch retrain pipeline.")
     parser.add_argument("--dry-run", action="store_true", help="Evaluate and validate without overwriting models.")
+    parser.add_argument("--include-pending", action="store_true", help="Include pending uncurated feedback records in addition to verified ones.")
     parser.add_argument("--lang", choices=["es", "en", "all"], default="all", help="Target language to retrain.")
     args = parser.parse_args()
 
@@ -194,7 +200,7 @@ def main():
 
     success = True
     for lang in languages:
-        ok = retrain_language(lang, store, dry_run=args.dry_run)
+        ok = retrain_language(lang, store, dry_run=args.dry_run, include_pending=args.include_pending)
         if not ok:
             success = False
 

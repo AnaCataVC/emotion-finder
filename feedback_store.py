@@ -225,6 +225,16 @@ def _encode_hrana_arg(arg: Any) -> Dict[str, Any]:
         return {"type": "text", "value": str(arg)}
 
 
+def _decode_hrana_cell(cell: Any) -> Any:
+    """Extract primitive Python value from Hrana protocol cell."""
+    if isinstance(cell, dict):
+        t = cell.get("type")
+        if t == "null":
+            return None
+        return cell.get("value")
+    return cell
+
+
 class TursoHttpFeedbackStore(FeedbackStore):
     """
     Lightweight HTTP client for Turso LibSQL Pipeline API.
@@ -331,10 +341,54 @@ class TursoHttpFeedbackStore(FeedbackStore):
         return res is not None
 
     def get_by_status(self, status: str = "pending", limit: int = 100) -> List[FeedbackRecord]:
-        # Batch querying for active learning scripts
-        stmt = "SELECT * FROM feedback_events WHERE status = ? ORDER BY created_at DESC LIMIT ?"
-        # Lightweight fallback: retrain scripts running locally pull via local SQLite or admin export
-        return []
+        stmt = """
+        SELECT id, created_at, user_text, normalized_text, detected_lang,
+               predicted_quadrant, predicted_emotion, model_confidence,
+               rating, corrected_quadrant, corrected_emotion, comments,
+               session_hash, status
+        FROM feedback_events
+        WHERE status = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+        """
+        res = self._execute_sql(stmt, [status, limit])
+        if not res:
+            return []
+        try:
+            results = res.get("results", [])
+            if not results or results[0].get("type") != "ok":
+                return []
+            
+            exec_res = results[0].get("response", {}).get("result", {})
+            cols = [c.get("name") for c in exec_res.get("cols", [])]
+            raw_rows = exec_res.get("rows", [])
+            
+            records = []
+            for row in raw_rows:
+                row_vals = [_decode_hrana_cell(cell) for cell in row]
+                d = dict(zip(cols, row_vals))
+                records.append(
+                    FeedbackRecord(
+                        id=d.get("id", ""),
+                        created_at=d.get("created_at", ""),
+                        user_text=d.get("user_text", ""),
+                        normalized_text=d.get("normalized_text", ""),
+                        detected_lang=d.get("detected_lang", "es"),
+                        predicted_quadrant=d.get("predicted_quadrant", ""),
+                        predicted_emotion=d.get("predicted_emotion", ""),
+                        model_confidence=float(d.get("model_confidence", 1.0)),
+                        rating=d.get("rating", "positive"),
+                        corrected_quadrant=d.get("corrected_quadrant"),
+                        corrected_emotion=d.get("corrected_emotion"),
+                        comments=d.get("comments"),
+                        session_hash=d.get("session_hash"),
+                        status=d.get("status", "pending"),
+                    )
+                )
+            return records
+        except Exception as exc:
+            logger.error("Failed to parse Turso feedback records: %s", exc)
+            return []
 
     def mark_status(self, record_id: str, new_status: str) -> bool:
         stmt = "UPDATE feedback_events SET status = ? WHERE id = ?"
@@ -342,6 +396,20 @@ class TursoHttpFeedbackStore(FeedbackStore):
         return res is not None
 
     def count(self) -> int:
+        stmt = "SELECT COUNT(*) AS total FROM feedback_events"
+        res = self._execute_sql(stmt, [])
+        if not res:
+            return 0
+        try:
+            results = res.get("results", [])
+            if not results or results[0].get("type") != "ok":
+                return 0
+            raw_rows = results[0].get("response", {}).get("result", {}).get("rows", [])
+            if raw_rows and raw_rows[0]:
+                val = _decode_hrana_cell(raw_rows[0][0])
+                return int(val)
+        except Exception:
+            pass
         return 0
 
 
