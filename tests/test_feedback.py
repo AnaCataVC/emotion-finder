@@ -120,6 +120,26 @@ def test_turso_fail_open_timeout():
     assert res is False
 
 
+def test_turso_hrana_arg_encoding():
+    """Verify strict Hrana protocol serialization for null, float, integer, and text."""
+    from feedback_store import _encode_hrana_arg
+
+    # Null value must strictly omit 'value' key
+    assert _encode_hrana_arg(None) == {"type": "null"}
+
+    # Float must preserve numerical float value (not string)
+    assert _encode_hrana_arg(1.0) == {"type": "float", "value": 1.0}
+    assert _encode_hrana_arg(0.85) == {"type": "float", "value": 0.85}
+
+    # Integers and Booleans
+    assert _encode_hrana_arg(42) == {"type": "integer", "value": "42"}
+    assert _encode_hrana_arg(True) == {"type": "integer", "value": "1"}
+
+    # Text strings
+    assert _encode_hrana_arg("emocion") == {"type": "text", "value": "emocion"}
+
+
+
 # ---------------------------------------------------------------------------
 # 2. HTMX Web Endpoints Integration Tests
 # ---------------------------------------------------------------------------

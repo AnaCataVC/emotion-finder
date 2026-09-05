@@ -211,6 +211,20 @@ class LocalSQLiteFeedbackStore(FeedbackStore):
 # Turso / LibSQL HTTP REST Implementation (Vercel Serverless)
 # ---------------------------------------------------------------------------
 
+def _encode_hrana_arg(arg: Any) -> Dict[str, Any]:
+    """Encode a Python value into strict Hrana protocol Value JSON."""
+    if arg is None:
+        return {"type": "null"}
+    elif isinstance(arg, bool):
+        return {"type": "integer", "value": "1" if arg else "0"}
+    elif isinstance(arg, int):
+        return {"type": "integer", "value": str(arg)}
+    elif isinstance(arg, float):
+        return {"type": "float", "value": float(arg)}
+    else:
+        return {"type": "text", "value": str(arg)}
+
+
 class TursoHttpFeedbackStore(FeedbackStore):
     """
     Lightweight HTTP client for Turso LibSQL Pipeline API.
@@ -227,6 +241,7 @@ class TursoHttpFeedbackStore(FeedbackStore):
         self.endpoint = f"{clean_url}/v2/pipeline"
         self.auth_token = auth_token
         self.timeout = timeout_seconds
+        self._schema_checked = False
 
     def _execute_sql(self, statement: str, args: List[Any]) -> Optional[Dict[str, Any]]:
         payload = {
@@ -235,8 +250,7 @@ class TursoHttpFeedbackStore(FeedbackStore):
                     "type": "execute",
                     "stmt": {
                         "sql": statement,
-                        "args": [{"type": "text" if isinstance(a, str) else "float" if isinstance(a, float) else "null",
-                                  "value": str(a) if a is not None else None} for a in args]
+                        "args": [_encode_hrana_arg(a) for a in args],
                     }
                 },
                 {"type": "close"}
@@ -250,12 +264,53 @@ class TursoHttpFeedbackStore(FeedbackStore):
         req = urllib.request.Request(self.endpoint, data=data, headers=headers, method="POST")
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                return json.loads(response.read().decode("utf-8"))
+                result = json.loads(response.read().decode("utf-8"))
+                results = result.get("results", [])
+                if results and results[0].get("type") == "error":
+                    logger.warning("Turso statement error: %s", results[0].get("error"))
+                    return None
+                return result
+        except urllib.error.HTTPError as exc:
+            err_body = ""
+            try:
+                err_body = exc.read().decode("utf-8")
+            except Exception:
+                pass
+            logger.warning("Turso HTTP error %s: %s (body: %s)", exc.code, exc.reason, err_body)
+            return None
         except (urllib.error.URLError, TimeoutError, Exception) as exc:
             logger.warning("Turso HTTP pipeline request failed (fail-open triggered): %s", exc)
             return None
 
+    def _ensure_schema(self) -> None:
+        """Automatically initialize the feedback table in Turso if not present."""
+        if self._schema_checked:
+            return
+        schema_sql = """
+        CREATE TABLE IF NOT EXISTS feedback_events (
+            id TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL,
+            user_text TEXT NOT NULL,
+            normalized_text TEXT NOT NULL,
+            detected_lang TEXT NOT NULL,
+            predicted_quadrant TEXT NOT NULL,
+            predicted_emotion TEXT NOT NULL,
+            model_confidence REAL NOT NULL,
+            rating TEXT NOT NULL,
+            corrected_quadrant TEXT,
+            corrected_emotion TEXT,
+            comments TEXT,
+            session_hash TEXT,
+            status TEXT DEFAULT 'pending'
+        );
+        """
+        self._execute_sql(schema_sql, [])
+        self._schema_checked = True
+
     def save(self, record: FeedbackRecord) -> bool:
+        if not self._schema_checked:
+            self._ensure_schema()
+
         stmt = """
         INSERT INTO feedback_events (
             id, created_at, user_text, normalized_text, detected_lang,
