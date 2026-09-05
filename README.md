@@ -19,7 +19,7 @@
 ---
 
 <a name="english"></a>
-## 🇬🇧 English
+## English
 
 ### 📌 Project Overview
 **Emotion Finder** is an interactive, bilingual web application engineered to bridge the gap between vague somatic/mental sensations and emotional self-awareness. 
@@ -209,7 +209,7 @@ Open your browser and navigate to **[http://localhost:5001](http://localhost:500
 ---
 
 <a name="español"></a>
-## 🇪🇸 Español
+## Español
 
 ### 📌 Descripción del Proyecto
 **Emotion Finder** es una aplicación web interactiva y bilingüe diseñada para transformar sensaciones físicas y estados mentales difusos en autoconocimiento emocional preciso.
