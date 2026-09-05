@@ -6,6 +6,9 @@
 [![HTMX](https://img.shields.io/badge/HTMX-2.0-336699.svg?logo=htmx&logoColor=white)](https://htmx.org/)
 [![PicoCSS](https://img.shields.io/badge/PicoCSS-v2-1095c1.svg?logo=css3&logoColor=white)](https://picocss.com/)
 [![scikit-learn](https://img.shields.io/badge/scikit--learn-1.4+-F7931E.svg?logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
+[![Active Learning](https://img.shields.io/badge/Active%20Learning-HITL%20Loop-8A2BE2.svg)](#)
+[![Turso LibSQL](https://img.shields.io/badge/Database-Turso%20LibSQL-00E599.svg?logo=sqlite&logoColor=white)](https://turso.tech/)
+[![Automated Retraining](https://img.shields.io/badge/CI%2FCD-Weekly%20Retrain-2088FF.svg?logo=githubactions&logoColor=white)](https://github.com/AnaCataVC/emotion-finder/actions)
 [![Vercel Ready](https://img.shields.io/badge/Vercel-Serverless-black.svg?logo=vercel&logoColor=white)](https://vercel.com/)
 [![Tests](https://img.shields.io/badge/Tests-100%25%20Passing-brightgreen.svg)](https://github.com/AnaCataVC/emotion-finder)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -211,6 +214,7 @@ Emotion Finder addresses this through **affective functional mapping** rather th
   3. **Cross-Validation Quality Gate**: Candidate models must sustain Stratified 5-Fold Cross-Validation Macro $F_1 \ge 0.95$.
   4. **Non-Negotiable Dialectal Regression Probes Gate**: Retrained candidate pipelines must achieve 100% accuracy on the dialectal `REGRESSION_PROBES` suite (Chilean and British idioms). If a single probe fails, the candidate artifact is rejected immediately.
 - **Anti-Bot & UI Honeypot Defense**: An invisible honeypot input (`hp_confirm`) silently intercepts automated crawlers without persisting spam, while preserving full user input text across multi-step somatic navigation.
+- **Automated CI/CD Retraining Pipeline (`.github/workflows/retrain.yml`)**: A scheduled GitHub Actions workflow executes autonomously every Sunday at 03:00 UTC (and on-demand via `workflow_dispatch`). It pulls feedback directly from Turso LibSQL, enforces the 10% safety cap, evaluates candidate pipelines against 5-fold cross-validation ($F_1 \ge 0.95$) and dialectal regression probes (100%), and pushes the updated `.joblib` model weights back to `main` with `[skip ci]`, triggering a live zero-downtime redeploy on Vercel without manual intervention.
 
 ---
 
@@ -248,25 +252,27 @@ pip install -r requirements.txt
 ```
 
 #### 4. Run the automated test suite
-Verify ML pipelines, dialectal mappings, decision trees, HTMX endpoints, and the feedback subsystem:
+Verify ML pipelines, dialectal mappings, decision trees, HTMX endpoints, and the feedback subsystem (30 automated tests):
 ```bash
 # Run the complete test suite (100% passing)
-pytest
+pytest tests/ -v
 
 # Or execute individual test modules
 python tests/test_pipeline.py
 pytest tests/test_feedback.py
 ```
 
-#### 5. Active learning batch retraining (Optional)
-Evaluate and retrain models incorporating verified user feedback under strict quality gates:
+#### 5. Active learning batch retraining & CI/CD automation
+Evaluate and retrain models incorporating user feedback under strict quality gates:
 ```bash
 # Validate candidate retrain in dry-run mode (evaluates gates without overwriting models)
-python scripts/retrain_from_feedback.py --dry-run
+python scripts/retrain_from_feedback.py --dry-run --include-pending
 
-# Execute retrain and update models when quality gates pass
-python scripts/retrain_from_feedback.py --lang all
+# Execute retrain locally and update models when quality gates pass
+python scripts/retrain_from_feedback.py --lang all --include-pending
 ```
+
+> **Automated Weekly Retraining**: A GitHub Actions workflow (`.github/workflows/retrain.yml`) runs automatically every Sunday at 03:00 UTC. It securely connects to Turso using environment secrets (`TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`), retrains the models, passes all 30 tests, and commits the updated weights to `main` without manual intervention. You can also trigger it manually from the **Actions** tab on GitHub.
 
 #### 6. (Optional) Production Vercel Turso configuration
 To enable remote feedback persistence on Vercel Serverless, configure Turso LibSQL environment variables (if omitted, the system gracefully defaults to `NullFeedbackStore` fail-open mode):
@@ -476,6 +482,7 @@ Emotion Finder resuelve esto implementando un **mapeo funcional afectivo** en lu
   3. **Compuerta de Validación Cruzada**: El modelo candidato debe alcanzar un Macro $F_1 \ge 0.95$ en 5-Fold Stratified CV.
   4. **Compuerta Inviolable de Modismos (`REGRESSION_PROBES`)**: El modelo candidato debe superar con un 100% de precisión la suite de pruebas de modismos chilenos y británicos. Si un solo modismo falla, el modelo es rechazado automáticamente.
 - **Defensa Anti-Bot mediante Honeypot**: Un campo oculto invisible (`hp_confirm`) intercepta scripts automatizados y descarta el spam silenciosamente sin penalizar la experiencia de usuario.
+- **Pipeline de Reentrenamiento Automatizado en CI/CD (`.github/workflows/retrain.yml`)**: Un flujo de trabajo programado en GitHub Actions se ejecuta de forma autónoma cada domingo a las 03:00 UTC (y a demanda mediante `workflow_dispatch`). Descarga el feedback directamente desde Turso LibSQL, aplica el tope de seguridad del 10%, evalúa los modelos candidatos bajo validación cruzada ($F_1 \ge 0.95$) y compuertas de modismos (100%), y publica los nuevos pesos compilados `.joblib` en `main` con `[skip ci]`, disparando la actualización en producción en Vercel sin intervención manual.
 
 ---
 
@@ -499,20 +506,24 @@ source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# 4. Ejecutar pruebas automatizadas (100% pasando)
-pytest
+# 4. Ejecutar pruebas automatizadas (100% pasando, 30 tests)
+pytest tests/ -v
 
 # O ejecutar suites individuales
 python tests/test_pipeline.py
 pytest tests/test_feedback.py
 
-# 5. Reentrenamiento por lotes con aprendizaje activo (Opcional)
+# 5. Reentrenamiento por lotes con aprendizaje activo y CI/CD
 # Modo dry-run (evalúa compuertas sin sobreescribir modelos en disco)
-python scripts/retrain_from_feedback.py --dry-run
+python scripts/retrain_from_feedback.py --dry-run --include-pending
 
-# Reentrenar e incorporar feedback verificado si pasa todas las compuertas
-python scripts/retrain_from_feedback.py --lang all
+# Reentrenar localmente e incorporar feedback si pasa todas las compuertas
+python scripts/retrain_from_feedback.py --lang all --include-pending
+```
 
+> **Reentrenamiento Semanal Automatizado**: Un workflow de GitHub Actions (`.github/workflows/retrain.yml`) se ejecuta de forma autónoma cada domingo a las 03:00 UTC. Se conecta a Turso usando los secretos del entorno (`TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN`), reentrena los clasificadores, verifica los 30 tests y actualiza los pesos en `main` de manera 100% desatendida. También puede dispararse manualmente desde la pestaña **Actions** de GitHub.
+
+```bash
 # 6. (Opcional) Configuración de Turso en Vercel
 export TURSO_DATABASE_URL="libsql://your-database.turso.io"
 export TURSO_AUTH_TOKEN="your-turso-auth-token"
@@ -528,6 +539,9 @@ Abre tu navegador en **[http://localhost:5001](http://localhost:5001)**.
 
 ```
 emotion-finder/
+├── .github/
+│   └── workflows/
+│       └── retrain.yml      # Automated weekly active learning retraining workflow (Cron / Dispatch)
 ├── main.py                  # FastHTML web app (routes, UI components, HTMX feedback widget)
 ├── inference.py             # ML inference module & language routing heuristic
 ├── emotion_matcher.py       # TF-IDF cosine-similarity direct emotion matcher
