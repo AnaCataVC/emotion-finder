@@ -1,0 +1,82 @@
+name: Automated Weekly Retraining
+
+on:
+  schedule:
+    # Run every Sunday at 03:00 UTC (Saturday night in the Americas)
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run mode (simulate and validate without saving or pushing models)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  retrain:
+    name: Retrain & Validate Models
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Check Turso credentials
+        id: check_creds
+        run: |
+          if [ -z "${{ secrets.TURSO_DATABASE_URL }}" ] || [ -z "${{ secrets.TURSO_AUTH_TOKEN }}" ]; then
+            echo "WARNING: TURSO_DATABASE_URL or TURSO_AUTH_TOKEN secrets are not configured."
+            echo "Please add them in GitHub Repo -> Settings -> Secrets and variables -> Actions."
+            echo "has_creds=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_creds=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run active learning retraining
+        if: steps.check_creds.outputs.has_creds == 'true'
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "Executing in dry-run mode..."
+            python scripts/retrain_from_feedback.py --dry-run --include-pending
+          else
+            echo "Executing full batch retraining..."
+            python scripts/retrain_from_feedback.py --include-pending
+          fi
+
+      - name: Run verification test suite
+        run: |
+          pytest tests/ -v
+
+      - name: Commit and push updated models if changed
+        if: steps.check_creds.outputs.has_creds == 'true' && inputs.dry_run != true
+        run: |
+          if git diff --quiet models/; then
+            echo "No model changes detected. Everything is up to date."
+          else
+            echo "Models updated! Committing and pushing to main..."
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add models/
+            git commit -m "feat(ml): automated weekly retraining from user feedback [skip ci]"
+            git push origin main
+            echo "Pushed updated models to main successfully."
+          fi
