@@ -111,15 +111,29 @@ def _bucket_intensity(confidence: float, lang: str) -> str:
     return "alta"
 
 
-def _find_secondary_quadrant(prob_dict: dict, primary: str, lang: str) -> str | None:
+def _top2_quadrant(prob_dict: dict, primary: str) -> str | None:
+    """Runner-up quadrant by raw probability, independent of any gap threshold.
+
+    Used both by _find_secondary_quadrant() (automatic, gap-gated) and by the
+    explicit quadrant-rejection flow in main.py (forced, gap-agnostic — the
+    user already said the top prediction is wrong, so the gap no longer
+    matters).
+    """
     ranked = sorted(prob_dict.items(), key=lambda kv: kv[1], reverse=True)
     if len(ranked) < 2:
         return None
-    (top1_label, top1_prob), (top2_label, top2_prob) = ranked[0], ranked[1]
+    (top1_label, _), (top2_label, _) = ranked[0], ranked[1]
     if top1_label != primary:
         return None  # defensive: should always match
-    if (top1_prob - top2_prob) < _SECONDARY_GAP_THRESHOLD[lang]:
-        return top2_label
+    return top2_label
+
+
+def _find_secondary_quadrant(prob_dict: dict, primary: str, lang: str) -> str | None:
+    top2 = _top2_quadrant(prob_dict, primary)
+    if top2 is None:
+        return None
+    if (prob_dict[primary] - prob_dict[top2]) < _SECONDARY_GAP_THRESHOLD[lang]:
+        return top2
     return None
 
 
@@ -144,6 +158,9 @@ def predict_quadrant(text: str) -> dict:
             - intensity: str | None ('baja'/'media'/'alta', None if uncertain)
             - secondary_quadrant: str | None (runner-up quadrant when the top-2
               probabilities are close; None if uncertain or clearly decided)
+            - runner_up_quadrant: str | None (runner-up quadrant regardless of
+              gap size; None only when uncertain. Used to offer an alternate
+              quadrant when the user explicitly rejects the top prediction)
     """
     _load_models()
 
@@ -158,6 +175,7 @@ def predict_quadrant(text: str) -> dict:
             "probabilities": {},
             "intensity": None,
             "secondary_quadrant": None,
+            "runner_up_quadrant": None,
         }
 
     # Truncate very long inputs
@@ -182,6 +200,7 @@ def predict_quadrant(text: str) -> dict:
             "probabilities": {},
             "intensity": None,
             "secondary_quadrant": None,
+            "runner_up_quadrant": None,
         }
 
     # Predict
@@ -204,6 +223,9 @@ def predict_quadrant(text: str) -> dict:
         "intensity": None if low_confidence else _bucket_intensity(confidence, lang),
         "secondary_quadrant": (
             None if low_confidence else _find_secondary_quadrant(prob_dict, primary, lang)
+        ),
+        "runner_up_quadrant": (
+            None if low_confidence else _top2_quadrant(prob_dict, primary)
         ),
     }
 
