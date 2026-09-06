@@ -11,11 +11,12 @@ Usage:
 
 import hashlib
 import os
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 import uuid
 from fasthtml.common import *
 
-from decision_tree import DECISION_TREES, get_all_emotions, get_node, get_quadrant_emotions, get_tree
+from decision_tree import QUADRANTS, get_node, get_quadrant_emotions, get_tree
 from emotion_matcher import is_confident_match, match_emotion
 from feedback_store import create_feedback_record, get_feedback_store
 from inference import detect_language, predict_quadrant
@@ -669,8 +670,7 @@ def _render_quadrant_confirmation(quadrant: str, lang: str, intensity: str,
 @rt("/")
 def get(lang: str = "es"):
     """Render the home page with brand hero section and input form."""
-    if lang not in ("es", "en"):
-        lang = "es"
+    lang = _normalize_lang(lang)
 
     content = (
         Div(
@@ -901,29 +901,44 @@ def predict_route(text: str, lang: str = "es"):
 @app.post("/tree")
 def tree_route(quadrant: str, path: str, lang: str = "es", step: str = "3",
                intensity: str = "", secondary: str = "0", user_text: str = "",
-               rejected_quadrant: str = "", req: Request = None, session: Any = None):
+               rejected_quadrant: str = "", req: Request = None, session=None):
     """Navigate binary decision tree and render next question or final emotion."""
-    if lang not in ("es", "en"):
-        lang = "es"
+    lang = _normalize_lang(lang)
 
     # The user explicitly said the originally predicted quadrant was wrong
     # (via the confirmation step in predict_route) — record it immediately
     # as negative feedback, since the retraining pipeline only needs the
     # (text, quadrant) pair, not a final emotion.
-    if rejected_quadrant and rejected_quadrant != quadrant:
+    if (
+        rejected_quadrant in QUADRANTS
+        and quadrant in QUADRANTS
+        and rejected_quadrant != quadrant
+    ):
         clean_text = (user_text or "").strip()
         if clean_text and len(clean_text) >= 2:
-            record = create_feedback_record(
-                user_text=clean_text[:300],
-                detected_lang=lang,
-                predicted_quadrant=rejected_quadrant,
-                predicted_emotion="",
-                model_confidence=1.0,
-                rating="negative",
-                corrected_quadrant=quadrant,
-                session_hash=_session_hash(session, req),
-            )
-            get_feedback_store().save(record)
+            session_hash = _session_hash(session, req)
+            store = get_feedback_store()
+            is_under_limit = True
+            if session_hash:
+                window_start = (
+                    datetime.now(timezone.utc) - timedelta(seconds=FEEDBACK_RATE_LIMIT_WINDOW_SECONDS)
+                ).isoformat()
+                if store.count_since(session_hash, window_start) >= FEEDBACK_RATE_LIMIT_MAX:
+                    is_under_limit = False
+
+            if is_under_limit:
+                record = create_feedback_record(
+                    user_text=clean_text[:300],
+                    detected_lang=lang,
+                    predicted_quadrant=rejected_quadrant,
+                    predicted_emotion="",
+                    model_confidence=1.0,
+                    rating="negative",
+                    corrected_quadrant=quadrant,
+                    session_hash=session_hash,
+                    status="pending",
+                )
+                store.save(record)
 
     current_step = int(step) if step.isdigit() else 3
     node = get_node(quadrant, path)
@@ -963,27 +978,47 @@ def tree_route(quadrant: str, path: str, lang: str = "es", step: str = "3",
 # ---------------------------------------------------------------------------
 
 
-def _session_hash(session: Any, req: Request = None) -> Optional[str]:
-    """Anonymous, privacy-safe session hash for feedback deduplication."""
-    session_id = None
-    if session is not None and hasattr(session, "get"):
-        session_id = session.get("session_id")
-        if not session_id:
-            session_id = str(uuid.uuid4())
-            session["session_id"] = session_id
+def _normalize_lang(lang: str) -> str:
+    """Fold any unsupported/missing lang value to the Spanish default."""
+    return lang if lang in ("es", "en") else "es"
+
+
+def _session_hash(session: Any = None, req: Request = None) -> Optional[str]:
+    """Anonymous, privacy-safe session hash for feedback deduplication and rate limiting.
+    Anchored strictly to client network identity (IP + User-Agent) so automated scripts
+    or bots cannot evade the rate limit by omitting, rotating, or wiping session cookies.
+    Truncated to 16 hex chars (64 bits of entropy) for privacy.
+    """
     ip = ""
     ua = ""
     if req is not None:
-        ip = req.headers.get("x-forwarded-for", req.client.host if req.client else "")
-        ua = req.headers.get("user-agent", "")
-    seed = f"{session_id or ''}:{ip}:{ua}"
+        forwarded = req.headers.get("x-forwarded-for")
+        ip = forwarded.split(",")[0].strip() if forwarded else (req.client.host if req.client else "")
+        ua = req.headers.get("user-agent", "")[:128]
+    seed = f"{ip}:{ua}"
     return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16] if seed.strip(":") else None
+
+
+# Anti-spam: max feedback submissions a single session_hash may make per window.
+FEEDBACK_RATE_LIMIT_MAX = 5
+FEEDBACK_RATE_LIMIT_WINDOW_SECONDS = 3600
+
+
+def _feedback_thanks(lang: str):
+    """Shared acknowledgment card, also used as the silent response for bots/rate-limited spam."""
+    return Div(
+        P(
+            f"✨ {t('feedback_thanks', lang)}",
+            style="color: var(--brand-violet); font-weight: 600; font-size: 0.95rem; margin: 0.5rem 0;",
+        ),
+        style="text-align: center;",
+    )
 
 
 @app.post("/feedback")
 def feedback_route(
     req: Request = None,
-    session: Any = None,
+    session=None,
     user_text: str = "",
     lang: str = "es",
     quadrant: str = "",
@@ -995,24 +1030,15 @@ def feedback_route(
     hp_confirm: str = "",
 ):
     """Receive and securely persist user feedback with anti-bot and fail-open defenses."""
-    if lang not in ("es", "en"):
-        lang = "es"
+    lang = _normalize_lang(lang)
 
     # Anti-bot honeypot defense: silent fake OK
     if hp_confirm:
-        return Div(
-            P(f"✨ {t('feedback_thanks', lang)}",
-              style="color: var(--brand-violet); font-weight: 600; font-size: 0.95rem; margin: 0.5rem 0;"),
-            style="text-align: center;",
-        )
+        return _feedback_thanks(lang)
 
     clean_text = (user_text or "").strip()
     if not clean_text or len(clean_text) < 2:
-        return Div(
-            P(f"✨ {t('feedback_thanks', lang)}",
-              style="color: var(--brand-violet); font-weight: 600; font-size: 0.95rem; margin: 0.5rem 0;"),
-            style="text-align: center;",
-        )
+        return _feedback_thanks(lang)
 
     clean_text = clean_text[:300]
     clean_comments = (comments or "").strip()[:150] if comments else None
@@ -1020,18 +1046,35 @@ def feedback_route(
     # Generate an anonymous, privacy-safe session hash for deduplication
     session_hash = _session_hash(session, req)
 
+    # Anti-bot rate limit: cap submissions per session_hash within the window (silent fake OK)
+    store = get_feedback_store()
+    if session_hash:
+        window_start = (
+            datetime.now(timezone.utc) - timedelta(seconds=FEEDBACK_RATE_LIMIT_WINDOW_SECONDS)
+        ).isoformat()
+        if store.count_since(session_hash, window_start) >= FEEDBACK_RATE_LIMIT_MAX:
+            return _feedback_thanks(lang)
+
     # Resolve canonical quadrant: specific emotion takes precedence over radio button
     final_corrected_quad = None
     if corrected_emotion:
-        for q_key in ["alta_positiva", "alta_negativa", "baja_positiva", "baja_negativa"]:
+        for q_key in QUADRANTS:
             for e in get_quadrant_emotions(q_key):
                 if e.get("emotion_es") == corrected_emotion or e.get("emotion_en") == corrected_emotion:
                     final_corrected_quad = q_key
                     break
             if final_corrected_quad:
                 break
-    if not final_corrected_quad and corrected_quadrant in ["alta_positiva", "alta_negativa", "baja_positiva", "baja_negativa"]:
+    if not final_corrected_quad and corrected_quadrant in QUADRANTS:
         final_corrected_quad = corrected_quadrant
+
+    # Resolve initial status for active learning safety (Hybrid model - Option 3):
+    # - Positive feedback confirming a valid quadrant with substantial text (>= 6 chars)
+    #   is auto-promoted to 'verified' to continuously feed the weekly retrain pipeline.
+    # - Corrective or negative feedback remains 'pending' for curation via scripts/curate_feedback.py.
+    initial_status = "pending"
+    if rating == "positive" and quadrant in QUADRANTS and len(clean_text) >= 6:
+        initial_status = "verified"
 
     record = create_feedback_record(
         user_text=clean_text,
@@ -1044,28 +1087,21 @@ def feedback_route(
         corrected_emotion=corrected_emotion if corrected_emotion else None,
         comments=clean_comments,
         session_hash=session_hash,
+        status=initial_status,
     )
 
-    store = get_feedback_store()
     store.save(record)
 
-    return Div(
-        P(
-            f"✨ {t('feedback_thanks', lang)}",
-            style="color: var(--brand-violet); font-weight: 600; font-size: 0.95rem; margin: 0.5rem 0;",
-        ),
-        style="text-align: center;",
-    )
+    return _feedback_thanks(lang)
 
 
 @app.post("/feedback-form")
 def feedback_form_route(user_text: str, lang: str = "es", quadrant: str = "", emotion: str = ""):
     """Render the expanded corrective feedback form via HTMX."""
-    if lang not in ("es", "en"):
-        lang = "es"
+    lang = _normalize_lang(lang)
 
     optgroups = []
-    for q_key in ["alta_positiva", "alta_negativa", "baja_positiva", "baja_negativa"]:
+    for q_key in QUADRANTS:
         q_label = _QUADRANT_LABELS.get(lang, {}).get(q_key, q_key)
         emotions = get_quadrant_emotions(q_key)
         options = [
@@ -1091,7 +1127,7 @@ def feedback_form_route(user_text: str, lang: str = "es", quadrant: str = "", em
             f" {_QUADRANT_LABELS.get(lang, {}).get(q_key, q_key)}",
             style="display: inline-flex; align-items: center; margin-right: 1rem; font-size: 0.85rem;",
         )
-        for q_key in ["alta_positiva", "alta_negativa", "baja_positiva", "baja_negativa"]
+        for q_key in QUADRANTS
     ]
 
     return Div(
@@ -1155,8 +1191,7 @@ def feedback_form_route(user_text: str, lang: str = "es", quadrant: str = "", em
 @app.post("/feedback-reset")
 def feedback_reset_route(user_text: str, lang: str = "es", quadrant: str = "", emotion: str = ""):
     """Reset back to initial thumbs-up / thumbs-down buttons if user cancels."""
-    if lang not in ("es", "en"):
-        lang = "es"
+    lang = _normalize_lang(lang)
     widget = _render_feedback_widget(user_text, lang, quadrant, emotion)
     return widget or Div(id="feedback-container")
 

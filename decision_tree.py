@@ -5,6 +5,8 @@ Decision Tree Data Structure for Emotion Finder.
 Represents 64 emotions mapped to the 4 quadrants of Russell's Circumplex Model.
 """
 
+QUADRANTS = ["alta_positiva", "alta_negativa", "baja_positiva", "baja_negativa"]
+
 DECISION_TREES: Dict[str, Dict[str, Any]] = {
     "alta_positiva": {
         "question_es": "¿Sientes un impulso físico vibrante de moverte, saltar o festejar con entusiasmo?",

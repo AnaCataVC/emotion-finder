@@ -14,10 +14,12 @@ Invariants:
 import json
 import logging
 import os
+import re
 import sqlite3
 import urllib.request
 import urllib.error
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,6 +27,16 @@ from typing import Any, Dict, List, Optional
 import uuid
 
 logger = logging.getLogger("emotion_finder.feedback")
+
+
+def normalize_feedback_text(text: str) -> str:
+    """Normalize text by lowercasing, stripping punctuation, and collapsing whitespace.
+    Ensures robust sample deduplication against trivial punctuation variations.
+    """
+    lowered = text.lower()
+    cleaned = re.sub(r"[^\w\s]", " ", lowered, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
 
 # ---------------------------------------------------------------------------
 # Data Contract
@@ -79,12 +91,17 @@ class FeedbackStore(ABC):
         """Return total number of feedback records stored."""
         pass
 
+    @abstractmethod
+    def count_since(self, session_hash: str, since_iso: str) -> int:
+        """Count records from this session_hash created at or after since_iso (rate limiting)."""
+        pass
+
 
 # ---------------------------------------------------------------------------
 # Local SQLite Implementation (Dev & Test)
 # ---------------------------------------------------------------------------
 
-_SQLITE_INIT_SCHEMA = """
+_FEEDBACK_TABLE_DDL = """
 CREATE TABLE IF NOT EXISTS feedback_events (
     id TEXT PRIMARY KEY,
     created_at TEXT NOT NULL,
@@ -101,8 +118,21 @@ CREATE TABLE IF NOT EXISTS feedback_events (
     session_hash TEXT,
     status TEXT DEFAULT 'pending'
 );
+"""
+
+_SQLITE_INIT_SCHEMA = _FEEDBACK_TABLE_DDL + """
 CREATE INDEX IF NOT EXISTS idx_feedback_normalized ON feedback_events(normalized_text);
 CREATE INDEX IF NOT EXISTS idx_feedback_status ON feedback_events(status);
+CREATE INDEX IF NOT EXISTS idx_feedback_session_time ON feedback_events(session_hash, created_at);
+"""
+
+_FEEDBACK_INSERT_SQL = """
+INSERT INTO feedback_events (
+    id, created_at, user_text, normalized_text, detected_lang,
+    predicted_quadrant, predicted_emotion, model_confidence,
+    rating, corrected_quadrant, corrected_emotion, comments,
+    session_hash, status
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 
@@ -127,26 +157,28 @@ class LocalSQLiteFeedbackStore(FeedbackStore):
         conn.row_factory = sqlite3.Row
         return conn
 
-    def _init_db(self) -> None:
+    @contextmanager
+    def _connection_context(self):
+        """Context manager guaranteeing transaction commit/rollback and connection closure for disk DBs."""
+        conn = self._get_connection()
         try:
-            conn = self._get_connection()
-            conn.executescript(_SQLITE_INIT_SCHEMA)
+            with conn:
+                yield conn
+        finally:
             if not self._is_memory:
                 conn.close()
+
+    def _init_db(self) -> None:
+        try:
+            with self._connection_context() as conn:
+                conn.executescript(_SQLITE_INIT_SCHEMA)
         except Exception as exc:
             logger.error("Failed to initialize SQLite feedback table: %s", exc)
 
     def save(self, record: FeedbackRecord) -> bool:
-        query = """
-        INSERT INTO feedback_events (
-            id, created_at, user_text, normalized_text, detected_lang,
-            predicted_quadrant, predicted_emotion, model_confidence,
-            rating, corrected_quadrant, corrected_emotion, comments,
-            session_hash, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """
+        query = _FEEDBACK_INSERT_SQL
         try:
-            with self._get_connection() as conn:
+            with self._connection_context() as conn:
                 conn.execute(query, (
                     record.id, record.created_at, record.user_text,
                     record.normalized_text, record.detected_lang,
@@ -163,7 +195,7 @@ class LocalSQLiteFeedbackStore(FeedbackStore):
     def get_by_status(self, status: str = "pending", limit: int = 100) -> List[FeedbackRecord]:
         query = "SELECT * FROM feedback_events WHERE status = ? ORDER BY created_at DESC LIMIT ?"
         try:
-            with self._get_connection() as conn:
+            with self._connection_context() as conn:
                 rows = conn.execute(query, (status, limit)).fetchall()
                 return [
                     FeedbackRecord(
@@ -191,7 +223,7 @@ class LocalSQLiteFeedbackStore(FeedbackStore):
     def mark_status(self, record_id: str, new_status: str) -> bool:
         query = "UPDATE feedback_events SET status = ? WHERE id = ?"
         try:
-            with self._get_connection() as conn:
+            with self._connection_context() as conn:
                 cursor = conn.execute(query, (new_status, record_id))
                 return cursor.rowcount > 0
         except Exception as exc:
@@ -200,10 +232,22 @@ class LocalSQLiteFeedbackStore(FeedbackStore):
 
     def count(self) -> int:
         try:
-            with self._get_connection() as conn:
+            with self._connection_context() as conn:
                 row = conn.execute("SELECT COUNT(*) AS total FROM feedback_events").fetchone()
                 return int(row["total"]) if row else 0
         except Exception:
+            return 0
+
+    def count_since(self, session_hash: str, since_iso: str) -> int:
+        query = "SELECT COUNT(*) AS total FROM feedback_events WHERE session_hash = ? AND created_at >= ?"
+        try:
+            with self._connection_context() as conn:
+                row = conn.execute(query, (session_hash, since_iso)).fetchone()
+                return int(row["total"]) if row else 0
+        except Exception as exc:
+            logger.error("Failed to count recent feedback from SQLite: %s", exc)
+            return 0
+            logger.error("Failed to count recent feedback from SQLite: %s", exc)
             return 0
 
 
@@ -293,42 +337,20 @@ class TursoHttpFeedbackStore(FeedbackStore):
             return None
 
     def _ensure_schema(self) -> None:
-        """Automatically initialize the feedback table in Turso if not present."""
+        """Automatically initialize the feedback table and indexes in Turso if not present."""
         if self._schema_checked:
             return
-        schema_sql = """
-        CREATE TABLE IF NOT EXISTS feedback_events (
-            id TEXT PRIMARY KEY,
-            created_at TEXT NOT NULL,
-            user_text TEXT NOT NULL,
-            normalized_text TEXT NOT NULL,
-            detected_lang TEXT NOT NULL,
-            predicted_quadrant TEXT NOT NULL,
-            predicted_emotion TEXT NOT NULL,
-            model_confidence REAL NOT NULL,
-            rating TEXT NOT NULL,
-            corrected_quadrant TEXT,
-            corrected_emotion TEXT,
-            comments TEXT,
-            session_hash TEXT,
-            status TEXT DEFAULT 'pending'
-        );
-        """
-        self._execute_sql(schema_sql, [])
+        self._execute_sql(_FEEDBACK_TABLE_DDL, [])
+        self._execute_sql("CREATE INDEX IF NOT EXISTS idx_feedback_normalized ON feedback_events(normalized_text);", [])
+        self._execute_sql("CREATE INDEX IF NOT EXISTS idx_feedback_status ON feedback_events(status);", [])
+        self._execute_sql("CREATE INDEX IF NOT EXISTS idx_feedback_session_time ON feedback_events(session_hash, created_at);", [])
         self._schema_checked = True
 
     def save(self, record: FeedbackRecord) -> bool:
         if not self._schema_checked:
             self._ensure_schema()
 
-        stmt = """
-        INSERT INTO feedback_events (
-            id, created_at, user_text, normalized_text, detected_lang,
-            predicted_quadrant, predicted_emotion, model_confidence,
-            rating, corrected_quadrant, corrected_emotion, comments,
-            session_hash, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """
+        stmt = _FEEDBACK_INSERT_SQL
         args = [
             record.id, record.created_at, record.user_text,
             record.normalized_text, record.detected_lang,
@@ -412,6 +434,25 @@ class TursoHttpFeedbackStore(FeedbackStore):
             pass
         return 0
 
+    def count_since(self, session_hash: str, since_iso: str) -> int:
+        if not self._schema_checked:
+            self._ensure_schema()
+        stmt = "SELECT COUNT(*) AS total FROM feedback_events WHERE session_hash = ? AND created_at >= ?"
+        res = self._execute_sql(stmt, [session_hash, since_iso])
+        if not res:
+            return 0
+        try:
+            results = res.get("results", [])
+            if not results or results[0].get("type") != "ok":
+                return 0
+            raw_rows = results[0].get("response", {}).get("result", {}).get("rows", [])
+            if raw_rows and raw_rows[0]:
+                val = _decode_hrana_cell(raw_rows[0][0])
+                return int(val)
+        except Exception:
+            pass
+        return 0
+
 
 # ---------------------------------------------------------------------------
 # Fallback Null Implementation (Fail-Open / Memory)
@@ -443,6 +484,12 @@ class NullFeedbackStore(FeedbackStore):
 
     def count(self) -> int:
         return len(self._memory_log)
+
+    def count_since(self, session_hash: str, since_iso: str) -> int:
+        return sum(
+            1 for r in self._memory_log
+            if r.session_hash == session_hash and r.created_at >= since_iso
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -493,17 +540,18 @@ def create_feedback_record(
     detected_lang: str,
     predicted_quadrant: str,
     predicted_emotion: str,
-    model_confidence: float,
-    rating: str,
+    model_confidence: float = 1.0,
+    rating: str = "positive",
     corrected_quadrant: Optional[str] = None,
     corrected_emotion: Optional[str] = None,
     comments: Optional[str] = None,
     session_hash: Optional[str] = None,
+    status: str = "pending",
 ) -> FeedbackRecord:
     """Helper to construct a validated, timestamped FeedbackRecord."""
     # Preprocessing text normalization for clean deduplication
     clean_text = user_text.strip()
-    norm_text = clean_text.lower()
+    norm_text = normalize_feedback_text(clean_text)
 
     return FeedbackRecord(
         id=str(uuid.uuid4()),
@@ -519,5 +567,5 @@ def create_feedback_record(
         corrected_emotion=corrected_emotion if corrected_emotion else None,
         comments=comments.strip()[:150] if comments else None,
         session_hash=session_hash,
-        status="pending",
+        status=status,
     )

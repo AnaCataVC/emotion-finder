@@ -27,7 +27,8 @@ import joblib
 import numpy as np
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 
-from feedback_store import FeedbackRecord, FeedbackStore, get_feedback_store
+from decision_tree import QUADRANTS
+from feedback_store import FeedbackRecord, FeedbackStore, get_feedback_store, normalize_feedback_text
 from train_model import (
     DATA_DIR,
     MODELS_DIR,
@@ -58,7 +59,7 @@ def extract_training_samples(records: List[FeedbackRecord], lang: str) -> List[T
     """
     samples = []
     seen_texts = set()
-    valid_quadrants = {"alta_positiva", "alta_negativa", "baja_positiva", "baja_negativa"}
+    valid_quadrants = QUADRANTS
 
     for r in records:
         if r.detected_lang != lang:
@@ -68,7 +69,7 @@ def extract_training_samples(records: List[FeedbackRecord], lang: str) -> List[T
         if len(text) < 6 or len(text) > 300:
             continue
 
-        norm = r.normalized_text.strip()
+        norm = normalize_feedback_text(r.normalized_text or r.user_text)
         if norm in seen_texts:
             continue
 

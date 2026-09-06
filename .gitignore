@@ -33,3 +33,9 @@ build/
 # Testing & Benchmarks
 .pytest_cache/
 .benchmarks/
+
+# Local Database
+*.db
+*.sqlite3
+data/feedback.db
+

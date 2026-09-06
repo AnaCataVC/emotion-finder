@@ -14,7 +14,7 @@ from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import TfidfVectorizer, ENGLISH_STOP_WORDS
 from sklearn.metrics.pairwise import cosine_similarity
 
-from decision_tree import get_quadrant_emotions
+from decision_tree import QUADRANTS, get_quadrant_emotions
 
 # Ensure NLTK stopwords are available
 try:
@@ -55,7 +55,7 @@ _CACHED_PROFILES: Dict[Tuple[str, str], Tuple[TfidfVectorizer, Any, List[Dict[st
 
 
 def _init_cache() -> None:
-    quadrants = ["alta_positiva", "alta_negativa", "baja_positiva", "baja_negativa"]
+    quadrants = QUADRANTS
     langs = ["es", "en"]
 
     for quad in quadrants:
