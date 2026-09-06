@@ -7,6 +7,7 @@
 [![PicoCSS](https://img.shields.io/badge/PicoCSS-v2-1095c1.svg?logo=css3&logoColor=white)](https://picocss.com/)
 [![scikit-learn](https://img.shields.io/badge/scikit--learn-1.4+-F7931E.svg?logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
 [![Active Learning](https://img.shields.io/badge/Active%20Learning-HITL%20Loop-8A2BE2.svg)](#)
+[![Status](https://img.shields.io/badge/Status-Early%20Stage-orange.svg)](#)
 [![Turso LibSQL](https://img.shields.io/badge/Database-Turso%20LibSQL-00E599.svg?logo=sqlite&logoColor=white)](https://turso.tech/)
 [![Automated Retraining](https://img.shields.io/badge/CI%2FCD-Weekly%20Retrain-2088FF.svg?logo=githubactions&logoColor=white)](https://github.com/AnaCataVC/emotion-finder/actions)
 [![Vercel Ready](https://img.shields.io/badge/Vercel-Serverless-black.svg?logo=vercel&logoColor=white)](https://vercel.com/)
@@ -27,13 +28,15 @@
 ### 📌 Project Overview
 **Emotion Finder** is an interactive, bilingual web application engineered to bridge the gap between vague somatic/mental sensations and emotional self-awareness. 
 
+> ⚠️ **Status: early-stage / experimental.** Quadrant and emotion detection are not yet reliable — the classifier's honest ceiling on figurative language it has never seen is ~29% (ES) / ~40% (EN) (see `HELD_OUT_IDIOM_PROBES` below). Accuracy improves over time through the active learning feedback loop described in point 6.
+
 Instead of forcing users to guess abstract psychological labels from an overwhelming drop-down list, Emotion Finder employs a multi-stage hybrid architecture:
-1. **Affective NLP Classifier**: Maps freeform natural language descriptions of physical and cognitive sensations into one of the 4 quadrants of **Russell's Circumplex Model of Affect** (Activation/Arousal $\times$ Valence).
+1. **Affective NLP Classifier**: Maps freeform natural language descriptions of physical and cognitive sensations into one of the 4 quadrants of **Russell's Circumplex Model of Affect** (Activation/Arousal $\times$ Valence). Before walking the user through the 4-question tree, it asks them in plain language to confirm the detected quadrant feels right — a "no" jumps straight to the runner-up quadrant's tree and records the rejection as immediate training feedback.
 2. **Semantic Emotion Matcher**: Ranks the quadrant's 16 emotions by TF-IDF cosine similarity between the user's own words and each emotion's description, jumping straight to a confident match instead of always asking generic sensation questions.
 3. **Binary Somatic Decision Tree (fallback)**: When no match is confident enough, guides the user through an interactive 4-step sequence of body-focused Yes/No questions to pinpoint **1 of 64 precise emotions** (16 per quadrant) — always reachable manually from a direct match too, for users who want to refine it.
 4. **Empathetic Emotional Clarity**: Concludes with a focused card presenting exclusively the identified emotion, its visual archetype, and an empathetic, introspective definition to facilitate emotional clarity.
 5. **Hypermedia-Driven Architecture (FastHTML + HTMX)**: Delivers smooth, SPA-like partial DOM transitions rendered entirely in server-side Python with zero client-side JavaScript build steps.
-6. **Human-in-the-Loop Feedback & Active Learning Loop**: Empowers users to validate or correct detected emotions directly on the leaf card. High-signal user corrections are safely persisted across serverless environments and incorporated into a quality-gated batch retraining pipeline.
+6. **Human-in-the-Loop Feedback & Active Learning Loop**: Empowers users to validate or correct detected emotions — both at the quadrant-confirmation step and on the final leaf card. High-signal user corrections are safely persisted across serverless environments and incorporated into a quality-gated batch retraining pipeline.
 
 ---
 
@@ -65,6 +68,11 @@ Instead of forcing users to guess abstract psychological labels from an overwhel
                        │                       │
                        │                       ▼
                        │          HTMX Partial DOM Replacement
+                       │                       │
+                       │                       ▼
+                       │       Plain-Language Quadrant Confirmation
+                       │      ("does this feel right?" — a "no" jumps to the
+                       │       runner-up quadrant's tree & records feedback)
                        │                       │
                        │                       ▼
                        │          Binary Somatic Decision Tree (4 Steps)
@@ -295,13 +303,15 @@ Open your browser and navigate to **[http://localhost:5001](http://localhost:500
 ### 📌 Descripción del Proyecto
 **Emotion Finder** es una aplicación web interactiva y bilingüe diseñada para transformar sensaciones físicas y estados mentales difusos en autoconocimiento emocional preciso.
 
+> ⚠️ **Estado: etapa temprana / experimental.** La identificación de cuadrante y emoción todavía no es confiable — el techo honesto del clasificador frente a lenguaje figurado nunca visto es ~29% (ES) / ~40% (EN) (ver `HELD_OUT_IDIOM_PROBES` más abajo). La precisión mejora con el tiempo gracias al bucle de aprendizaje activo descrito en el punto 6.
+
 En lugar de obligar al usuario a elegir etiquetas psicológicas abstractas de una lista abrumadora, Emotion Finder implementa una arquitectura híbrida de varias etapas:
-1. **Clasificador NLP de Afecto**: Mapea descripciones en lenguaje natural sobre sensaciones físicas y cognitivas en uno de los 4 cuadrantes del **Modelo Circunflejo del Afecto de Russell** (Activación $\times$ Valencia).
+1. **Clasificador NLP de Afecto**: Mapea descripciones en lenguaje natural sobre sensaciones físicas y cognitivas en uno de los 4 cuadrantes del **Modelo Circunflejo del Afecto de Russell** (Activación $\times$ Valencia). Antes de guiar al usuario por el árbol de 4 preguntas, le confirma en lenguaje natural si el cuadrante detectado tiene sentido — un "no" salta directo al árbol del cuadrante alternativo y registra el rechazo como feedback inmediato para el reentrenamiento.
 2. **Matcher Semántico de Emoción**: Ordena las 16 emociones del cuadrante por similitud coseno TF-IDF entre las propias palabras del usuario y la descripción de cada emoción, saltando directo a un match confiable en vez de preguntar siempre lo mismo.
 3. **Árbol de Decisión Somático Binario (respaldo)**: Cuando ningún match es suficientemente confiable, guía al usuario a través de una secuencia interactiva de 4 preguntas corporales de Sí/No para identificar **1 de 64 emociones precisas** (16 por cuadrante) — también accesible manualmente desde un match directo, para quien prefiera refinarlo.
 4. **Claridad Emocional Empática**: Concluye en una tarjeta enfocada que presenta exclusivamente la emoción identificada, su emoji representativo y una definición empática e introspectiva orientada a facilitar la comprensión emocional.
 5. **Arquitectura Hypermedia (FastHTML + HTMX)**: Brinda transiciones de página suaves y reactivas tipo SPA renderizadas 100% en Python del lado del servidor, sin dependencias de compilación ni frameworks pesados de JavaScript.
-6. **Bucle de Feedback y Aprendizaje Activo (HITL)**: Permite a los usuarios validar o corregir la emoción detectada directamente en la tarjeta de resultado. Las correcciones se persisten de forma desacoplada y alimentan un pipeline de reentrenamiento por lotes con compuertas estrictas de calidad.
+6. **Bucle de Feedback y Aprendizaje Activo (HITL)**: Permite a los usuarios validar o corregir la emoción detectada — tanto en el paso de confirmación de cuadrante como en la tarjeta de resultado final. Las correcciones se persisten de forma desacoplada y alimentan un pipeline de reentrenamiento por lotes con compuertas estrictas de calidad.
 
 ---
 
@@ -333,6 +343,11 @@ En lugar de obligar al usuario a elegir etiquetas psicológicas abstractas de un
                        │                       │
                        │                       ▼
                        │          Reemplazo Parcial de DOM vía HTMX
+                       │                       │
+                       │                       ▼
+                       │     Confirmación de Cuadrante en Lenguaje Natural
+                       │    ("¿tiene sentido?" — un "no" salta al árbol del
+                       │     cuadrante alternativo y registra feedback)
                        │                       │
                        │                       ▼
                        │         Árbol de Decisión Somático Binario (4 Pasos)
