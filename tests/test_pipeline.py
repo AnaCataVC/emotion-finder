@@ -19,9 +19,15 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+import json
+import re
+
 import decision_tree
 import inference
 import emotion_matcher
+from starlette.testclient import TestClient
+
+from main import app
 
 
 def test_spanish_prediction_high_negative():
@@ -183,11 +189,6 @@ def test_emotion_matcher():
 
 
 def test_webapp_endpoints():
-    import json
-    import re
-    from starlette.testclient import TestClient
-    from main import app
-
     client = TestClient(app)
 
     # 1. GET / (Home Page)
@@ -262,10 +263,6 @@ def test_webapp_endpoints():
 def test_secondary_emotion_path():
     """Rejecting the top-1 quadrant at the confirmation step should jump straight to the
     runner-up quadrant's tree, and persist immediate negative feedback for retraining."""
-    import json
-    import re
-    from starlette.testclient import TestClient
-    from main import app
     from feedback_store import get_feedback_store
 
     res = inference.predict_quadrant("I feel like celebrating")
@@ -304,11 +301,6 @@ def test_secondary_emotion_path():
 
 def test_intensity_display():
     """The confidence bucket should thread through /predict and render on the final leaf."""
-    import json
-    import re
-    from starlette.testclient import TestClient
-    from main import app
-
     res = inference.predict_quadrant("I'm absolutely buzzing with excitement and joy")
     assert res["intensity"] == "alta"
 

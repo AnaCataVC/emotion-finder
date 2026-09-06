@@ -159,13 +159,14 @@ def test_endpoint_feedback_positive_vote(test_client):
     assert response.status_code == 200
     assert "¡Gracias por tu aporte!" in response.text or "feedback ayuda a entrenar" in response.text
 
-    # Verify stored record
+    # Verify stored record (auto-promoted to 'verified' under Option 3 Hybrid policy)
     store = get_feedback_store()
-    records = store.get_by_status("pending")
+    records = store.get_by_status("verified")
     matching = [r for r in records if r.user_text == "tengo el pecho apretado de la angustia"]
     assert len(matching) >= 1
     assert matching[0].rating == "positive"
     assert matching[0].predicted_quadrant == "alta_negativa"
+    assert matching[0].status == "verified"
     assert matching[0].session_hash is not None
     assert len(matching[0].session_hash) == 16
 
@@ -254,6 +255,42 @@ def test_anti_bot_honeypot_protection(test_client):
     assert response.status_code == 200
     # Store count must not increment
     assert store.count() == initial_count
+
+
+def test_feedback_rate_limit_per_session(test_client):
+    """POST /feedback beyond FEEDBACK_RATE_LIMIT_MAX for the same session is silently dropped."""
+    from main import FEEDBACK_RATE_LIMIT_MAX
+
+    store = get_feedback_store()
+
+    def submit(i):
+        return test_client.post(
+            "/feedback",
+            data={
+                "user_text": f"mensaje de prueba de limite numero {i}",
+                "lang": "es",
+                "quadrant": "alta_positiva",
+                "emotion": "Alegría",
+                "rating": "positive",
+            },
+        )
+
+    for i in range(FEEDBACK_RATE_LIMIT_MAX):
+        resp = submit(i)
+        assert resp.status_code == 200
+
+    count_at_limit = len(
+        [r for r in store.get_by_status("verified") if r.user_text.startswith("mensaje de prueba de limite")]
+    )
+    assert count_at_limit == FEEDBACK_RATE_LIMIT_MAX
+
+    # One more submission from the same session must be silently dropped (no new record)
+    resp = submit("over")
+    assert resp.status_code == 200
+    count_after_limit = len(
+        [r for r in store.get_by_status("verified") if r.user_text.startswith("mensaje de prueba de limite")]
+    )
+    assert count_after_limit == FEEDBACK_RATE_LIMIT_MAX
 
 
 def test_invalid_text_handling(test_client):
@@ -375,3 +412,182 @@ def test_retrain_pipeline_dry_run():
     # Dry-run execution
     success = retrain_language("es", store, dry_run=True)
     assert success is True
+
+
+def test_feedback_rate_limit_without_cookies(test_client):
+    """Clients omitting or clearing cookies (simulating bots) are still rate-limited via network anchor."""
+    from main import FEEDBACK_RATE_LIMIT_MAX
+
+    store = get_feedback_store()
+    tag = "prueba_sin_cookies"
+
+    def submit_cookieless(i):
+        test_client.cookies.clear()
+        return test_client.post(
+            "/feedback",
+            data={
+                "user_text": f"{tag} peticion numero {i}",
+                "lang": "es",
+                "quadrant": "alta_positiva",
+                "emotion": "Alegría",
+                "rating": "positive",
+            },
+        )
+
+    for i in range(FEEDBACK_RATE_LIMIT_MAX):
+        resp = submit_cookieless(i)
+        assert resp.status_code == 200
+
+    count_at_limit = len([r for r in store.get_by_status("verified") if tag in r.user_text])
+    assert count_at_limit == FEEDBACK_RATE_LIMIT_MAX
+
+    # Additional request with cleared cookies from the same client MUST still be dropped
+    resp = submit_cookieless("blocked")
+    assert resp.status_code == 200
+    count_after_limit = len([r for r in store.get_by_status("verified") if tag in r.user_text])
+    assert count_after_limit == FEEDBACK_RATE_LIMIT_MAX
+
+
+def test_tree_route_rate_limit_and_quadrant_validation(test_client):
+    """POST /tree validates quadrant keys and applies silent rate limiting on negative rejection feedback."""
+    from main import FEEDBACK_RATE_LIMIT_MAX
+
+    store = get_feedback_store()
+
+    # 1. Invalid quadrant rejection is ignored (not saved to DB)
+    initial_count = store.count()
+    resp_invalid = test_client.post(
+        "/tree",
+        data={
+            "quadrant": "invalid_quadrant",
+            "path": "",
+            "rejected_quadrant": "fake_quadrant",
+            "user_text": "texto de prueba cuadrante falso",
+        },
+    )
+    assert resp_invalid.status_code == 200
+    assert store.count() == initial_count
+
+    # 2. Valid quadrant rejection creates a pending feedback record
+    test_client.cookies.clear()
+    unique_text = "esto no es tristeza sino rabia viva"
+    resp_valid = test_client.post(
+        "/tree",
+        data={
+            "quadrant": "alta_negativa",
+            "path": "",
+            "rejected_quadrant": "baja_negativa",
+            "user_text": unique_text,
+        },
+    )
+    assert resp_valid.status_code == 200
+    pending_matching = [r for r in store.get_by_status("pending") if r.user_text == unique_text]
+    assert len(pending_matching) == 1
+    assert pending_matching[0].rating == "negative"
+    assert pending_matching[0].corrected_quadrant == "alta_negativa"
+    assert pending_matching[0].predicted_quadrant == "baja_negativa"
+    assert pending_matching[0].status == "pending"
+
+
+def test_hybrid_curation_status_assignment(test_client):
+    """Option 3 Hybrid Policy: Thumbs-up auto-promotes to 'verified', corrections stay 'pending'."""
+    store = get_feedback_store()
+
+    # Thumbs up -> verified
+    t_up = "siento una alegria pura y sincera"
+    test_client.post(
+        "/feedback",
+        data={
+            "user_text": t_up,
+            "lang": "es",
+            "quadrant": "alta_positiva",
+            "emotion": "Alegría",
+            "rating": "positive",
+        },
+    )
+    verified = [r for r in store.get_by_status("verified") if r.user_text == t_up]
+    assert len(verified) == 1
+    assert verified[0].status == "verified"
+
+    # Correction / thumbs down -> pending
+    t_down = "no era alegria sino que me late el corazon de miedo"
+    test_client.post(
+        "/feedback",
+        data={
+            "user_text": t_down,
+            "lang": "es",
+            "quadrant": "alta_positiva",
+            "emotion": "Alegría",
+            "rating": "negative",
+            "corrected_quadrant": "alta_negativa",
+        },
+    )
+    pending = [r for r in store.get_by_status("pending") if r.user_text == t_down]
+    assert len(pending) == 1
+    assert pending[0].status == "pending"
+
+
+def test_deduplication_resilient_to_punctuation():
+    """extract_training_samples unifies samples that differ only in punctuation or whitespace."""
+    records = [
+        FeedbackRecord(
+            id="p1",
+            created_at="2026-09-06T00:00:00Z",
+            user_text="estoy muy feliz hoy!",
+            normalized_text="estoy muy feliz hoy!",
+            detected_lang="es",
+            predicted_quadrant="alta_positiva",
+            predicted_emotion="Alegría",
+            model_confidence=0.95,
+            rating="positive",
+            status="verified",
+        ),
+        FeedbackRecord(
+            id="p2",
+            created_at="2026-09-06T00:01:00Z",
+            user_text="estoy muy feliz hoy...",  # Trivial punctuation variation
+            normalized_text="estoy muy feliz hoy...",
+            detected_lang="es",
+            predicted_quadrant="alta_positiva",
+            predicted_emotion="Alegría",
+            model_confidence=0.95,
+            rating="positive",
+            status="verified",
+        ),
+    ]
+    samples = extract_training_samples(records, "es")
+    # Only 1 sample extracted due to robust punctuation-resilient deduplication
+    assert len(samples) == 1
+    assert samples[0][0] == "estoy muy feliz hoy!"
+
+
+def test_curate_feedback_cli_helpers():
+    """Verify CLI review card formatting and dry-run curation session in curate_feedback.py."""
+    from scripts.curate_feedback import format_record, curate_session
+
+    store = get_feedback_store()
+    rec = create_feedback_record(
+        user_text="siento una furia incontrolable y el pecho caliente",
+        detected_lang="es",
+        predicted_quadrant="baja_negativa",
+        predicted_emotion="Tristeza",
+        model_confidence=0.72,
+        rating="negative",
+        corrected_quadrant="alta_negativa",
+        corrected_emotion="Ira",
+        comments="Es rabia pura",
+        status="pending",
+    )
+    store.save(rec)
+
+    # Format card validation
+    card = format_record(rec, 1, 1)
+    assert "furia incontrolable" in card
+    assert "alta_negativa" in card
+    assert "Es rabia pura" in card
+    assert "PENDING" in card
+
+    # Ensure empty/dry-run curation session executes without unhandled errors
+    curate_session(status="incorporated", dry_run=True)
+
+
