@@ -212,14 +212,29 @@ def test_webapp_endpoints():
     assert "Entusiasmo" in resp_pred.text, "A confident text-similarity match should skip straight to the emotion"
     assert "Explorar con preguntas" in resp_pred.text, "Manual tree exploration must stay available as a fallback"
 
-    # 3b. POST /predict (weak text-similarity match falls back to the yes/no tree)
+    # 3b. POST /predict (weak text-similarity match shows the quadrant confirmation step first)
     resp_fallback = client.post("/predict", data={"text": "tengo rabia", "lang": "es"})
     assert resp_fallback.status_code == 200
     matches = re.findall(r"hx-vals='([^']+)'", resp_fallback.text)
-    assert len(matches) >= 2, f"Expected at least 2 buttons with hx-vals, got {len(matches)}"
+    assert len(matches) >= 1, f"Expected at least 1 button with hx-vals, got {len(matches)}"
+    confirm_quadrant = None
     for val_str in matches:
         parsed = json.loads(val_str)
         assert "quadrant" in parsed
+        assert parsed["path"] == "", "Confirmation step buttons should jump to the tree root"
+        if not parsed.get("rejected_quadrant"):
+            confirm_quadrant = parsed["quadrant"]
+    assert confirm_quadrant is not None, "Expected a 'Sí, tiene sentido' button"
+
+    # Clicking "Sí, tiene sentido" should render the real question 1 with yes/no buttons.
+    resp_confirmed = client.post("/tree", data={
+        "quadrant": confirm_quadrant, "path": "", "lang": "es", "step": "2",
+    })
+    assert resp_confirmed.status_code == 200
+    matches_q1 = re.findall(r"hx-vals='([^']+)'", resp_confirmed.text)
+    assert len(matches_q1) >= 2, f"Expected at least 2 buttons with hx-vals, got {len(matches_q1)}"
+    for val_str in matches_q1:
+        parsed = json.loads(val_str)
         assert parsed["path"] in ["yes", "no"]
 
     # 4. POST /predict (Low confidence / uncertain fallback)
@@ -245,31 +260,46 @@ def test_webapp_endpoints():
 
 
 def test_secondary_emotion_path():
-    """A close top1/top2 quadrant call should offer the runner-up's tree as an alternate path."""
+    """Rejecting the top-1 quadrant at the confirmation step should jump straight to the
+    runner-up quadrant's tree, and persist immediate negative feedback for retraining."""
     import json
     import re
     from starlette.testclient import TestClient
     from main import app
+    from feedback_store import get_feedback_store
 
     res = inference.predict_quadrant("I feel like celebrating")
-    assert res["secondary_quadrant"] is not None
-    assert res["secondary_quadrant"] != res["quadrant"]
+    assert res["runner_up_quadrant"] is not None
+    assert res["runner_up_quadrant"] != res["quadrant"]
 
     client = TestClient(app)
     resp = client.post("/predict", data={"text": "I feel like celebrating", "lang": "en"})
     assert resp.status_code == 200
-    assert "Explore that other possibility" in resp.text
+    assert "Does that match how you feel?" in resp.text
     matches = re.findall(r"hx-vals='([^']+)'", resp.text)
-    secondary_vals = [json.loads(m) for m in matches if json.loads(m).get("secondary") == "1"]
-    assert len(secondary_vals) == 1
-    assert secondary_vals[0]["quadrant"] == res["secondary_quadrant"]
+    reject_vals = [json.loads(m) for m in matches if json.loads(m).get("rejected_quadrant")]
+    assert len(reject_vals) == 1
+    assert reject_vals[0]["quadrant"] == res["runner_up_quadrant"]
+    assert reject_vals[0]["rejected_quadrant"] == res["quadrant"]
 
     resp_leaf = client.post("/tree", data={
-        "quadrant": res["secondary_quadrant"], "path": "yes.yes.yes.yes",
+        "quadrant": res["runner_up_quadrant"], "path": "yes.yes.yes.yes",
         "lang": "en", "step": "5", "secondary": "1",
+        "user_text": "I feel like celebrating",
+        "rejected_quadrant": res["quadrant"],
     })
     assert resp_leaf.status_code == 200
     assert "Here's your alternate emotion:" in resp_leaf.text
+
+    store = get_feedback_store()
+    records = store.get_by_status("pending")
+    matching = [
+        r for r in records
+        if r.user_text == "I feel like celebrating" and r.rating == "negative"
+    ]
+    assert len(matching) >= 1
+    assert matching[0].predicted_quadrant == res["quadrant"]
+    assert matching[0].corrected_quadrant == res["runner_up_quadrant"]
 
 
 def test_intensity_display():
