@@ -11,7 +11,7 @@ Usage:
 
 import hashlib
 import os
-from typing import Any
+from typing import Any, Optional
 import uuid
 from fasthtml.common import *
 
@@ -403,6 +403,7 @@ _I18N = {
         "title": "Emotion Finder",
         "hero_title": "¿Qué estás sintiendo en este momento?",
         "subtitle": "Mapea tus sensaciones físicas y mentales para descubrir tu emoción exacta",
+        "early_stage_notice": "🧪 Proyecto en fase temprana: la identificación puede fallar, y mejora con cada corrección tuya.",
         "placeholder": "Describe brevemente cómo te sientes... (ej: siento un nudo en la garganta y me hierve la sangre de la rabia)",
         "submit": "Analizar mi emoción",
         "analyzing": "Analizando sensaciones...",
@@ -416,6 +417,8 @@ _I18N = {
         "secondary_prompt": "🌗 También podrías estar sintiendo algo distinto. ¿Quieres explorar ese otro camino?",
         "explore_secondary": "Explorar esa otra posibilidad",
         "explore_manually": "¿No es exacto? Explorar con preguntas",
+        "confirm_quadrant_yes": "Sí, tiene sentido",
+        "confirm_quadrant_no": "No, no es así",
         "step": "Paso",
         "of": "de",
         "footer_text": "Emotion Finder · Basado en el Modelo Circunflejo del Afecto de Russell",
@@ -429,11 +432,13 @@ _I18N = {
         "feedback_submit": "Enviar corrección",
         "feedback_cancel": "Cancelar",
         "feedback_thanks": "¡Gracias por tu aporte! Tu feedback ayuda a entrenar el algoritmo.",
+        "feedback_footer_note": "Tu respuesta se usa para reentrenar el modelo la próxima semana.",
     },
     "en": {
         "title": "Emotion Finder",
         "hero_title": "What are you feeling right now?",
         "subtitle": "Map your physical and mental sensations to uncover your exact emotion",
+        "early_stage_notice": "🧪 Early-stage project: detection can miss, and it improves with every correction you make.",
         "placeholder": "Briefly describe how you feel... (e.g., my heart is racing and I feel overwhelmed by stress)",
         "submit": "Analyze my emotion",
         "analyzing": "Analyzing sensations...",
@@ -447,6 +452,8 @@ _I18N = {
         "secondary_prompt": "🌗 You might also be feeling something different. Want to explore that other path?",
         "explore_secondary": "Explore that other possibility",
         "explore_manually": "Not quite right? Explore with questions",
+        "confirm_quadrant_yes": "Yes, that's right",
+        "confirm_quadrant_no": "No, that's not it",
         "step": "Step",
         "of": "of",
         "footer_text": "Emotion Finder · Grounded in Russell's Circumplex Model of Affect",
@@ -460,6 +467,7 @@ _I18N = {
         "feedback_submit": "Submit correction",
         "feedback_cancel": "Cancel",
         "feedback_thanks": "Thank you! Your feedback helps train the algorithm.",
+        "feedback_footer_note": "Your answer is used to retrain the model next week.",
     },
 }
 
@@ -476,6 +484,21 @@ _QUADRANT_LABELS = {
         "alta_negativa": "🔥 High Arousal · Negative",
         "baja_positiva": "🌿 Low Arousal · Positive",
         "baja_negativa": "🌧️ Low Arousal · Negative",
+    },
+}
+
+_QUADRANT_CONFIRM_PHRASES = {
+    "es": {
+        "alta_positiva": "Esto suena a algo movido y positivo: mucha energía y buena vibra. ¿Es así como te sientes?",
+        "alta_negativa": "Esto suena como algo intenso y desagradable — mucha energía, poco agrado. ¿Es así como lo sientes?",
+        "baja_positiva": "Esto suena a algo calmado y agradable: poca energía, pero buena vibra. ¿Es así como te sientes?",
+        "baja_negativa": "Esto suena a algo pesado y desagradable: poca energía y poco agrado. ¿Es así como te sientes?",
+    },
+    "en": {
+        "alta_positiva": "This sounds upbeat and positive — high energy, good vibes. Does that match how you feel?",
+        "alta_negativa": "This sounds intense and unpleasant — high energy, low enjoyment. Does that match how you feel?",
+        "baja_positiva": "This sounds calm and pleasant — low energy, good vibes. Does that match how you feel?",
+        "baja_negativa": "This sounds heavy and unpleasant — low energy, low enjoyment. Does that match how you feel?",
     },
 }
 
@@ -555,6 +578,28 @@ def _progress_bar(current_step: int, total_steps: int = 5):
     return Div(*steps, cls="progress-bar")
 
 
+def _tree_button(label: str, cls: str, quadrant: str, path: str, lang: str, step: str,
+                  intensity: str = "", secondary: str = "0", user_text: str = "", **extra_vals):
+    """Shared HTMX button that posts to /tree with the standard navigation payload."""
+    return Button(
+        label,
+        hx_post="/tree",
+        hx_target="#result-area",
+        hx_swap="innerHTML transition:true",
+        hx_vals={
+            "quadrant": quadrant,
+            "path": path,
+            "lang": lang,
+            "step": step,
+            "intensity": intensity,
+            "secondary": secondary,
+            "user_text": user_text,
+            **extra_vals,
+        },
+        cls=cls,
+    )
+
+
 def _render_question(question_text: str, quadrant: str, path: str, lang: str, step: int,
                       intensity: str = "", secondary: str = "0", user_text: str = ""):
     """Helper to render a binary question card with Yes/No HTMX buttons (DRY)."""
@@ -567,39 +612,48 @@ def _render_question(question_text: str, quadrant: str, path: str, lang: str, st
         Div(
             H3(question_text, cls="question-prompt"),
             Div(
-                Button(
-                    t("yes", lang),
-                    hx_post="/tree",
-                    hx_target="#result-area",
-                    hx_swap="innerHTML transition:true",
-                    hx_vals={
-                        "quadrant": quadrant,
-                        "path": next_yes,
-                        "lang": lang,
-                        "step": next_step,
-                        "intensity": intensity,
-                        "secondary": secondary,
-                        "user_text": user_text,
-                    },
-                    cls="btn-gradient",
-                ),
-                Button(
-                    t("no", lang),
-                    hx_post="/tree",
-                    hx_target="#result-area",
-                    hx_swap="innerHTML transition:true",
-                    hx_vals={
-                        "quadrant": quadrant,
-                        "path": next_no,
-                        "lang": lang,
-                        "step": next_step,
-                        "intensity": intensity,
-                        "secondary": secondary,
-                        "user_text": user_text,
-                    },
-                    cls="btn-outline",
-                ),
+                _tree_button(t("yes", lang), "btn-gradient", quadrant, next_yes, lang, next_step,
+                             intensity, secondary, user_text),
+                _tree_button(t("no", lang), "btn-outline", quadrant, next_no, lang, next_step,
+                             intensity, secondary, user_text),
                 cls="answer-buttons",
+            ),
+            cls="question-card",
+        ),
+        cls="brand-card",
+    )
+
+
+def _render_quadrant_confirmation(quadrant: str, lang: str, intensity: str,
+                                   user_text: str, top2_quadrant: str | None):
+    """Ask the user, in plain language, whether the detected quadrant feels
+    right before walking them through the 4-question tree. A "no" jumps
+    straight to the runner-up quadrant's tree instead (and is recorded as
+    immediate feedback in tree_route) rather than asking the same 4 generic
+    questions inside a quadrant the user already flagged as wrong.
+    """
+    phrase = _QUADRANT_CONFIRM_PHRASES.get(lang, _QUADRANT_CONFIRM_PHRASES["es"]).get(quadrant, "")
+
+    buttons = [
+        _tree_button(t("confirm_quadrant_yes", lang), "btn-gradient", quadrant, "", lang, "2",
+                     intensity, "0", user_text),
+    ]
+    if top2_quadrant is not None:
+        buttons.append(
+            _tree_button(t("confirm_quadrant_no", lang), "btn-outline", top2_quadrant, "", lang, "2",
+                         intensity, "1", user_text, rejected_quadrant=quadrant)
+        )
+
+    return Article(
+        Div(
+            H3(phrase, cls="question-prompt"),
+            Div(*buttons, cls="answer-buttons"),
+            A(
+                t("try_again", lang),
+                href=f"/?lang={lang}",
+                role="button",
+                cls="btn-outline",
+                style="margin-top: 0.75rem;",
             ),
             cls="question-card",
         ),
@@ -622,6 +676,7 @@ def get(lang: str = "es"):
         Div(
             H1(t("hero_title", lang), cls="gradient-title"),
             P(t("subtitle", lang), cls="hero-subtitle"),
+            P(t("early_stage_notice", lang), style="color: var(--pico-muted-color); font-size: 0.9rem;"),
             cls="hero-wrapper",
         ),
 
@@ -707,6 +762,10 @@ def _render_feedback_widget(user_text: str, lang: str, quadrant: str, emotion: s
             ),
             style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;",
         ),
+        P(
+            t("feedback_footer_note", lang),
+            style="font-size: 0.8rem; color: var(--pico-muted-color); margin-top: 0.5rem; text-align: center;",
+        ),
         id="feedback-container",
         style="margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid rgba(123, 64, 212, 0.15);",
     )
@@ -733,21 +792,9 @@ def _render_emotion_result(node: dict, quadrant: str, lang: str,
 
     manual_explore_button = None
     if manual_explore_path is not None:
-        manual_explore_button = Button(
-            t("explore_manually", lang),
-            hx_post="/tree",
-            hx_target="#result-area",
-            hx_swap="innerHTML transition:true",
-            hx_vals={
-                "quadrant": quadrant,
-                "path": manual_explore_path,
-                "lang": lang,
-                "step": "2",
-                "intensity": intensity,
-                "secondary": secondary,
-                "user_text": user_text,
-            },
-            cls="btn-outline",
+        manual_explore_button = _tree_button(
+            t("explore_manually", lang), "btn-outline", quadrant, manual_explore_path, lang, "2",
+            intensity, secondary, user_text,
         )
 
     feedback_block = _render_feedback_widget(user_text, lang, quadrant, emotion_name)
@@ -815,22 +862,8 @@ def predict_route(text: str, lang: str = "es"):
     if secondary_quadrant:
         extra_blocks.append(Div(
             P(t("secondary_prompt", lang), style="color: var(--pico-muted-color); font-size: 0.95rem; margin: 0.75rem 0 0.25rem;"),
-            Button(
-                t("explore_secondary", lang),
-                hx_post="/tree",
-                hx_target="#result-area",
-                hx_swap="innerHTML transition:true",
-                hx_vals={
-                    "quadrant": secondary_quadrant,
-                    "path": "",
-                    "lang": lang,
-                    "step": "2",
-                    "intensity": intensity,
-                    "secondary": "1",
-                    "user_text": text,
-                },
-                cls="btn-outline",
-            ),
+            _tree_button(t("explore_secondary", lang), "btn-outline", secondary_quadrant, "", lang, "2",
+                         intensity, "1", text),
             style="text-align: center;",
         ))
 
@@ -850,33 +883,47 @@ def predict_route(text: str, lang: str = "es"):
                 *extra_blocks,
             )
 
-    question_key = f"question_{lang}"
-    question_text = tree_root.get(question_key, tree_root.get("question_es", ""))
-
     return Div(
         Div(
             Span(quadrant_label, cls=f"quadrant-badge q-{quadrant}"),
             style="text-align: center; margin-bottom: 0.5rem;",
         ),
-        _render_question(
-            question_text=question_text,
+        _render_quadrant_confirmation(
             quadrant=quadrant,
-            path="",
             lang=lang,
-            step=2,
             intensity=intensity,
             user_text=text,
+            top2_quadrant=result.get("runner_up_quadrant"),
         ),
-        *extra_blocks,
     )
 
 
 @app.post("/tree")
 def tree_route(quadrant: str, path: str, lang: str = "es", step: str = "3",
-               intensity: str = "", secondary: str = "0", user_text: str = ""):
+               intensity: str = "", secondary: str = "0", user_text: str = "",
+               rejected_quadrant: str = "", req: Request = None, session: Any = None):
     """Navigate binary decision tree and render next question or final emotion."""
     if lang not in ("es", "en"):
         lang = "es"
+
+    # The user explicitly said the originally predicted quadrant was wrong
+    # (via the confirmation step in predict_route) — record it immediately
+    # as negative feedback, since the retraining pipeline only needs the
+    # (text, quadrant) pair, not a final emotion.
+    if rejected_quadrant and rejected_quadrant != quadrant:
+        clean_text = (user_text or "").strip()
+        if clean_text and len(clean_text) >= 2:
+            record = create_feedback_record(
+                user_text=clean_text[:300],
+                detected_lang=lang,
+                predicted_quadrant=rejected_quadrant,
+                predicted_emotion="",
+                model_confidence=1.0,
+                rating="negative",
+                corrected_quadrant=quadrant,
+                session_hash=_session_hash(session, req),
+            )
+            get_feedback_store().save(record)
 
     current_step = int(step) if step.isdigit() else 3
     node = get_node(quadrant, path)
@@ -914,6 +961,23 @@ def tree_route(quadrant: str, path: str, lang: str = "es", step: str = "3",
 # ---------------------------------------------------------------------------
 # Feedback & Active Learning Routes
 # ---------------------------------------------------------------------------
+
+
+def _session_hash(session: Any, req: Request = None) -> Optional[str]:
+    """Anonymous, privacy-safe session hash for feedback deduplication."""
+    session_id = None
+    if session is not None and hasattr(session, "get"):
+        session_id = session.get("session_id")
+        if not session_id:
+            session_id = str(uuid.uuid4())
+            session["session_id"] = session_id
+    ip = ""
+    ua = ""
+    if req is not None:
+        ip = req.headers.get("x-forwarded-for", req.client.host if req.client else "")
+        ua = req.headers.get("user-agent", "")
+    seed = f"{session_id or ''}:{ip}:{ua}"
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16] if seed.strip(":") else None
 
 
 @app.post("/feedback")
@@ -954,19 +1018,7 @@ def feedback_route(
     clean_comments = (comments or "").strip()[:150] if comments else None
 
     # Generate an anonymous, privacy-safe session hash for deduplication
-    session_id = None
-    if session is not None and hasattr(session, "get"):
-        session_id = session.get("session_id")
-        if not session_id:
-            session_id = str(uuid.uuid4())
-            session["session_id"] = session_id
-    ip = ""
-    ua = ""
-    if req is not None:
-        ip = req.headers.get("x-forwarded-for", req.client.host if req.client else "")
-        ua = req.headers.get("user-agent", "")
-    seed = f"{session_id or ''}:{ip}:{ua}"
-    session_hash = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16] if seed.strip(":") else None
+    session_hash = _session_hash(session, req)
 
     # Resolve canonical quadrant: specific emotion takes precedence over radio button
     final_corrected_quad = None
