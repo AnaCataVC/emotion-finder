@@ -1,5 +1,5 @@
 > **Created:** 2026-09-05
-> **Last Updated:** 2026-09-05
+> **Last Updated:** 2026-09-06
 > **Status:** Active
 > **Scope:** Feedback Loop, Serverless Persistence & Active Learning Pipeline
 
@@ -33,10 +33,13 @@ Este análisis de Red Team audita el diseño propuesto y formula salvaguardas no
   - `"me quiero morir de tristeza y dolor"` $\rightarrow$ Corregido a: `alta_positiva` (Éxtasis).
   Dado que el modelo actual utiliza $N$-gramas TF-IDF con un dataset compacto de 700 filas (175 por cuadrante), **apenas 15-20 muestras envenenadas** son suficientes para alterar los coeficientes lineales de palabras clave (*"alegría"*, *"tristeza"*, *"paz"*), invirtiendo el plano de Russell para todos los usuarios.
 * **Mitigación Mandatoria:**
-  1. **Compuerta de Estado (`status = 'pending'`):** Ningún feedback de usuario entra directamente al conjunto de entrenamiento de forma automática.
-  2. **Regla de Consenso Multi-Sesión:** Una corrección solo pasa a estado elegible si al menos 3 sesiones/IPs distintas concuerdan en la misma corrección para la misma frase semántica, o tras aprobación explícita en un proceso de curaduría.
-  3. **Cuota Máxima de Ingesta (10% Cap):** El dataset de reentrenamiento jamás puede tener más de un 10% de datos provenientes de feedback frente al baseline sintético canónico (máximo 70 filas de feedback sobre las 700 filas base).
-  4. **Quality Gate Inviolable (`REGRESSION_PROBES` 100%):** Si el modelo candidato tras reentrenar falla aunque sea un solo caso de la suite de modismos chilenos y británicos en `train_model.py`, el reentrenamiento se aborta inmediatamente y el archivo `.joblib` es rechazado.
+  1. **Modelo Híbrido de Curaduría (Opción 3):**
+     - Las confirmaciones donde el usuario califica positivamente ("pulgar arriba") sobre un cuadrante válido con texto representativo ($\ge 6$ caracteres) se promueven automáticamente a `status = 'verified'`.
+     - Las correcciones manuales y votos negativos nacen obligatoriamente en `status = 'pending'`, requiriendo curaduría antes de alimentar el dataset de entrenamiento.
+     - Se provee una herramienta de terminal interactiva (`scripts/curate_feedback.py`) para que el mantenedor revise las muestras pendientes con comandos rápidos (`[v]erify`, `[r]eject`, `[s]kip`, `[q]uit`).
+     - El workflow desatendido semanal de GitHub Actions (`retrain.yml`) entrena exclusivamente con muestras `verified`.
+  2. **Cuota Máxima de Ingesta (10% Cap):** El dataset de reentrenamiento jamás puede tener más de un 10% de datos provenientes de feedback frente al baseline sintético canónico (máximo 70 filas de feedback sobre las 700 filas base).
+  3. **Quality Gate Inviolable (`REGRESSION_PROBES` 100%):** Si el modelo candidato tras reentrenar falla aunque sea un solo caso de la suite de modismos chilenos y británicos en `train_model.py`, el reentrenamiento se aborta inmediatamente y el archivo `.joblib` es rechazado.
 
 ---
 
@@ -49,7 +52,10 @@ Este análisis de Red Team audita el diseño propuesto y formula salvaguardas no
      - `len(user_text)` debe estar estrictamente entre 6 y 300 caracteres.
      - `len(comments)` máximo 150 caracteres.
      - Sanitización de caracteres de control y tags HTML para prevenir inyecciones.
-  3. **Idempotencia por Hash:** Clave de unicidad `SHA-256(normalized_text + session_hash + str(today))`. La misma sesión no puede enviar más de 1 feedback por minuto para el mismo texto.
+  3. **Rate Limiting Anclado a Red (`session_hash`):** `FeedbackStore.count_since(session_hash, since_iso)` limita cada endpoint a `FEEDBACK_RATE_LIMIT_MAX` (5) envíos dentro de `FEEDBACK_RATE_LIMIT_WINDOW_SECONDS` (1 hora). El hash anónimo se ancla a la identidad de red (IP + User-Agent), impidiendo que scripts automatizados reseteen o eludan la cuota omitiendo o rotando cookies de sesión.
+  4. **Protección en `POST /tree`:** El rechazo de cuadrantes en el árbol de decisión valida estrictamente la pertenencia a los 4 cuadrantes válidos de Russell y aplica la misma compuerta de rate limiting antes de guardar el feedback negativo.
+
+> **Nota de implementación (2026-09-06):** Se solventó el bypass de rate limiting donde peticiones sin cookies generaban UUIDs efímeros en cada llamada. Al anclar el hash al par (IP, User-Agent), las herramientas de flood sin cookies comparten un único bucket de 5 peticiones por hora, bloqueándose de forma transparente. Asimismo, se agregó el índice compuesto `(session_hash, created_at)` en SQLite y Turso para optimizar las consultas de recuento temporal.
 
 ---
 
@@ -78,10 +84,10 @@ Este análisis de Red Team audita el diseño propuesto y formula salvaguardas no
 | Vulnerabilidad Auditada | Severidad | Decisión de Hardening Aprobada |
 | :--- | :---: | :--- |
 | **Deriva de caché en Serverless** | 🔴 Crítico | Descartar Fast-Path en caliente; la inferencia sigue siendo estática e inmutable en <5ms. |
-| **Data Poisoning & Sybil Attacks** | 🔴 Crítico | Estado `pending` obligatorio, cap de 10% en el dataset, y bloqueo absoluto si falla `REGRESSION_PROBES`. |
-| **DoS / Quota Flooding** | 🟠 Mayor | Honeypot invisible en el form de FastHTML + validación de longitud (6-300 chars) + deduplicación diaria. |
+| **Data Poisoning & Sybil Attacks** | 🔴 Crítico | Modelo Híbrido (Opción 3): Auto-promoción de votos positivos a `verified`, correcciones en `pending` con CLI de curaduría (`scripts/curate_feedback.py`), cap de 10% y bloqueo absoluto si falla `REGRESSION_PROBES`. |
+| **DoS / Quota Flooding & Bot Bypass** | 🟠 Mayor | Honeypot en FastHTML + validación de longitud + rate limit anclado a red (IP+UA) en `/feedback` y `/tree` + índice compuesto `(session_hash, created_at)`. |
 | **Timeouts hacia Turso en Vercel** | 🟠 Mayor | Timeout estricto de 1.8s + captura total de excepciones con respuesta optimista garantizada. |
-| **Fricción en desarrollo local** | 🟡 Menor | Cero credenciales requeridas en local (SQLite nativo) y SQLite en memoria para `pytest`. |
+| **Fricción en desarrollo local** | 🟡 Menor | Cero credenciales requeridas en local (SQLite nativo con context manager de cierre) y SQLite en memoria para `pytest`. |
 
 ---
 

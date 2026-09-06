@@ -221,8 +221,15 @@ Emotion Finder addresses this through **affective functional mapping** rather th
   2. **Deduplication & Length Gating**: User texts under 6 characters or over 300 characters are rejected, and inputs are deduplicated by lowercased normalized string.
   3. **Cross-Validation Quality Gate**: Candidate models must sustain Stratified 5-Fold Cross-Validation Macro $F_1 \ge 0.95$.
   4. **Non-Negotiable Dialectal Regression Probes Gate**: Retrained candidate pipelines must achieve 100% accuracy on the dialectal `REGRESSION_PROBES` suite (Chilean and British idioms). If a single probe fails, the candidate artifact is rejected immediately.
-- **Anti-Bot & UI Honeypot Defense**: An invisible honeypot input (`hp_confirm`) silently intercepts automated crawlers without persisting spam, while preserving full user input text across multi-step somatic navigation.
-- **Automated CI/CD Retraining Pipeline (`.github/workflows/retrain.yml`)**: A scheduled GitHub Actions workflow executes autonomously every Sunday at 03:00 UTC (and on-demand via `workflow_dispatch`). It pulls feedback directly from Turso LibSQL, enforces the 10% safety cap, evaluates candidate pipelines against 5-fold cross-validation ($F_1 \ge 0.95$) and dialectal regression probes (100%), and pushes the updated `.joblib` model weights back to `main` with `[skip ci]`, triggering a live zero-downtime redeploy on Vercel without manual intervention.
+
+#### 8. Hybrid Curation Model, Anti-Bot Hardening & FastHTML Resolution
+- **Hybrid Curation Model (Option 3)**: To balance zero-friction automation with strict protection against data poisoning, user feedback follows a hybrid lifecycle:
+  - **Positive Validations (`verified`)**: Submissions where the user confirms the model's prediction ("thumbs-up") on a valid quadrant with sufficient text length ($\ge 6$ chars) are automatically promoted to `status = 'verified'`, continuously nourishing the weekly retraining pipeline without requiring manual intervention.
+  - **Corrective Feedback (`pending`)**: User corrections and negative ratings are held in `status = 'pending'` to prevent trolls or mislabeled suggestions from poisoning linear classification boundaries.
+  - **Interactive CLI Review Tool (`scripts/curate_feedback.py`)**: Maintainers can review pending submissions with single-keystroke speed (`[v]erify`, `[r]eject`, `[s]kip`, `[q]uit`).
+- **Network-Anchored Rate Limiting**: `/feedback` and somatic rejection events on `/tree` enforce a strict rate limit of `FEEDBACK_RATE_LIMIT_MAX` (5 requests/hour) evaluated by `FeedbackStore.count_since()`. The anonymous `session_hash` is anchored to client network identity (IP + User-Agent), neutralizing bot scripts that attempt to bypass limits by rotating or omitting session cookies.
+- **Tree-Route Validation & Quota Guard**: `POST /tree` validates that suggested and rejected quadrants strictly belong to Russell's 4-quadrant schema before persistence, preventing injection of arbitrary quadrant tags.
+- **Automated CI/CD Retraining Guarantee**: Scheduled GitHub Actions executions (`.github/workflows/retrain.yml`) ingest strictly `verified` samples, ensuring zero uncurated or malicious inputs alter production weights unattended.
 
 ---
 
@@ -247,7 +254,7 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 ```
 
-- **Linux / macOS (Bash/Zsh):**
+- **Linux / macOS:**
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -260,7 +267,7 @@ pip install -r requirements.txt
 ```
 
 #### 4. Run the automated test suite
-Verify ML pipelines, dialectal mappings, decision trees, HTMX endpoints, and the feedback subsystem (30 automated tests):
+Verify ML pipelines, dialectal mappings, decision trees, HTMX endpoints, and the feedback subsystem (36 automated tests):
 ```bash
 # Run the complete test suite (100% passing)
 pytest tests/ -v
@@ -270,26 +277,31 @@ python tests/test_pipeline.py
 pytest tests/test_feedback.py
 ```
 
-#### 5. Active learning batch retraining & CI/CD automation
-Evaluate and retrain models incorporating user feedback under strict quality gates:
+#### 5. Interactive feedback curation tool
 ```bash
-# Validate candidate retrain in dry-run mode (evaluates gates without overwriting models)
-python scripts/retrain_from_feedback.py --dry-run --include-pending
-
-# Execute retrain locally and update models when quality gates pass
-python scripts/retrain_from_feedback.py --lang all --include-pending
+python scripts/curate_feedback.py
 ```
 
-> **Automated Weekly Retraining**: A GitHub Actions workflow (`.github/workflows/retrain.yml`) runs automatically every Sunday at 03:00 UTC. It securely connects to Turso using environment secrets (`TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`), retrains the models, passes all 30 tests, and commits the updated weights to `main` without manual intervention. You can also trigger it manually from the **Actions** tab on GitHub.
+#### 6. Active learning batch retraining & CI/CD automation
+Evaluate and retrain models incorporating verified user feedback under strict quality gates:
+```bash
+# Validate candidate retrain in dry-run mode (evaluates gates without overwriting models)
+python scripts/retrain_from_feedback.py --dry-run
 
-#### 6. (Optional) Production Vercel Turso configuration
+# Execute retrain locally with verified data
+python scripts/retrain_from_feedback.py --lang all
+```
+
+> **Automated Weekly Retraining**: A GitHub Actions workflow (`.github/workflows/retrain.yml`) runs automatically every Sunday at 03:00 UTC. It securely connects to Turso using environment secrets (`TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`), retrains the models using verified feedback, passes all 36 tests, and commits the updated weights to `main` without manual intervention. You can also trigger it manually from the **Actions** tab on GitHub with optional pending inclusion.
+
+#### 7. (Optional) Production Vercel Turso configuration
 To enable remote feedback persistence on Vercel Serverless, configure Turso LibSQL environment variables (if omitted, the system gracefully defaults to `NullFeedbackStore` fail-open mode):
 ```bash
 export TURSO_DATABASE_URL="libsql://your-database.turso.io"
 export TURSO_AUTH_TOKEN="your-turso-auth-token"
 ```
 
-#### 7. Start the development server
+#### 8. Start the development server
 ```bash
 python main.py
 ```
@@ -499,6 +511,15 @@ Emotion Finder resuelve esto implementando un **mapeo funcional afectivo** en lu
 - **Defensa Anti-Bot mediante Honeypot**: Un campo oculto invisible (`hp_confirm`) intercepta scripts automatizados y descarta el spam silenciosamente sin penalizar la experiencia de usuario.
 - **Pipeline de Reentrenamiento Automatizado en CI/CD (`.github/workflows/retrain.yml`)**: Un flujo de trabajo programado en GitHub Actions se ejecuta de forma autónoma cada domingo a las 03:00 UTC (y a demanda mediante `workflow_dispatch`). Descarga el feedback directamente desde Turso LibSQL, aplica el tope de seguridad del 10%, evalúa los modelos candidatos bajo validación cruzada ($F_1 \ge 0.95$) y compuertas de modismos (100%), y publica los nuevos pesos compilados `.joblib` en `main` con `[skip ci]`, disparando la actualización en producción en Vercel sin intervención manual.
 
+#### 8. Modelo Híbrido de Curaduría, Blindaje Anti-Bot y Resolución en FastHTML
+- **Modelo Híbrido de Curaduría (Opción 3)**: Para equilibrar la automatización continua con una rigurosa protección contra envenenamiento de datos, el feedback sigue un ciclo de vida híbrido:
+  - **Confirmaciones Positivas (`verified`)**: Los envíos donde el usuario confirma la predicción ("pulgar arriba") sobre un cuadrante válido con texto suficiente ($\ge 6$ caracteres) se promueven automáticamente a `status = 'verified'`, nutriendo el reentrenamiento semanal de forma continua y autónoma.
+  - **Correcciones de Usuario (`pending`)**: Las correcciones manuales y calificaciones negativas se mantienen en `status = 'pending'` para evitar que usuarios maliciosos o confundidos alteren los límites de decisión.
+  - **Herramienta CLI Interactiva (`scripts/curate_feedback.py`)**: Los mantenedores pueden revisar las correcciones pendientes a máxima velocidad con una sola tecla (`[v]erify`, `[r]eject`, `[s]kip`, `[q]uit`).
+- **Rate Limiting Anclado a Red**: `/feedback` y los eventos de rechazo en `/tree` aplican un tope estricto de `FEEDBACK_RATE_LIMIT_MAX` (5 envíos/hora) respaldado por `FeedbackStore.count_since()`. El `session_hash` anónimo se ancla a la identidad de red (IP + User-Agent), neutralizando bots que intenten evadir el límite rotando u omitiendo cookies de sesión.
+- **Validación de Cuadrantes en `/tree`**: `POST /tree` valida que los cuadrantes sugeridos y rechazados pertenezcan estrictamente al esquema de 4 cuadrantes de Russell antes de persistirlos, previniendo la inyección de etiquetas arbitrarias.
+- **Garantía de Reentrenamiento en CI/CD**: El flujo programado en GitHub Actions (`.github/workflows/retrain.yml`) ingiere exclusivamente muestras `verified`, asegurando que ningún dato sin curar o malicioso modifique los modelos de producción de manera desatendida.
+
 ---
 
 ### 🚀 Instalación y Uso Local
@@ -521,29 +542,32 @@ source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# 4. Ejecutar pruebas automatizadas (100% pasando, 30 tests)
+# 4. Ejecutar pruebas automatizadas (100% pasando, 36 tests)
 pytest tests/ -v
 
 # O ejecutar suites individuales
 python tests/test_pipeline.py
 pytest tests/test_feedback.py
 
-# 5. Reentrenamiento por lotes con aprendizaje activo y CI/CD
-# Modo dry-run (evalúa compuertas sin sobreescribir modelos en disco)
-python scripts/retrain_from_feedback.py --dry-run --include-pending
+# 5. Herramienta interactiva de curaduría de feedback
+python scripts/curate_feedback.py
 
-# Reentrenar localmente e incorporar feedback si pasa todas las compuertas
-python scripts/retrain_from_feedback.py --lang all --include-pending
+# 6. Reentrenamiento por lotes con aprendizaje activo y CI/CD
+# Modo dry-run (evalúa compuertas sin sobreescribir modelos en disco)
+python scripts/retrain_from_feedback.py --dry-run
+
+# Reentrenar localmente con datos verificados
+python scripts/retrain_from_feedback.py --lang all
 ```
 
-> **Reentrenamiento Semanal Automatizado**: Un workflow de GitHub Actions (`.github/workflows/retrain.yml`) se ejecuta de forma autónoma cada domingo a las 03:00 UTC. Se conecta a Turso usando los secretos del entorno (`TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN`), reentrena los clasificadores, verifica los 30 tests y actualiza los pesos en `main` de manera 100% desatendida. También puede dispararse manualmente desde la pestaña **Actions** de GitHub.
+> **Reentrenamiento Semanal Automatizado**: Un workflow de GitHub Actions (`.github/workflows/retrain.yml`) se ejecuta de forma autónoma cada domingo a las 03:00 UTC. Se conecta a Turso usando los secretos del entorno (`TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN`), reentrena los clasificadores utilizando únicamente feedback `verified`, verifica los 36 tests y actualiza los pesos en `main` de manera 100% desatendida. También puede dispararse manualmente desde la pestaña **Actions** de GitHub con opción de incluir registros pendientes si se desea.
 
 ```bash
-# 6. (Opcional) Configuración de Turso en Vercel
+# 7. (Opcional) Configuración de Turso en Vercel
 export TURSO_DATABASE_URL="libsql://your-database.turso.io"
 export TURSO_AUTH_TOKEN="your-turso-auth-token"
 
-# 7. Iniciar servidor de desarrollo
+# 8. Iniciar servidor de desarrollo
 python main.py
 ```
 Abre tu navegador en **[http://localhost:5001](http://localhost:5001)**.
@@ -578,7 +602,7 @@ emotion-finder/
 │   └── model_en.joblib      # Compressed English pipeline (~27 KB)
 ├── tests/
 │   ├── test_pipeline.py     # NLP classifications, dialectal idioms, tree topology, web app
-│   └── test_feedback.py     # Feedback storage, HTMX routes, honeypot, active learning gates
+│   └── test_feedback.py     # Feedback storage, HTMX routes, honeypot, rate limiting, active learning gates
 ├── docs/
 │   ├── external-references/ # Technical research & architecture references
 │   │   ├── active-learning-feedback-loop.md          # HITL active learning & serverless notes
