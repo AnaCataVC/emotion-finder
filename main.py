@@ -26,6 +26,12 @@ from inference import detect_language, predict_quadrant
 # ---------------------------------------------------------------------------
 
 _CUSTOM_CSS = """
+:root,
+html,
+body {
+    color-scheme: dark;
+}
+
 :root {
     --brand-magenta: #e84393;
     --brand-violet: #7b40d4;
@@ -379,11 +385,13 @@ _SESSION_SECRET = os.environ.get(
 
 app, rt = fast_app(
     pico=True,
+    htmlkw={"data-theme": "dark"},
     static_path="public",
     secret_key=_SESSION_SECRET,
     hdrs=(
         Meta(charset="utf-8"),
         Meta(name="viewport", content="width=device-width, initial-scale=1"),
+        Meta(name="color-scheme", content="dark"),
         Meta(name="description", content="Interactive emotion detector using Russell's Circumplex Model of Affect"),
         Link(rel="icon", type="image/png", href="/favicon.png"),
         Style(_CUSTOM_CSS),

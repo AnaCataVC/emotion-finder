@@ -402,6 +402,16 @@ def test_adversarial_secondary_emotion_sanity():
         f"Definitive input should not trigger secondary quadrant, got {res['secondary_quadrant']}"
 
 
+def test_dark_mode_enforced():
+    """Verify that dark mode is strictly enforced and system-adaptive light mode is removed."""
+    client = TestClient(app)
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert 'data-theme="dark"' in resp.text, "The <html> tag must contain data-theme='dark'"
+    assert 'name="color-scheme" content="dark"' in resp.text, "Must declare dark color-scheme in meta header"
+    assert "color-scheme: dark" in resp.text, "CSS must declare color-scheme: dark"
+
+
 if __name__ == "__main__":
     test_spanish_prediction_high_negative()
     test_spanish_prediction_high_positive()
@@ -415,9 +425,11 @@ if __name__ == "__main__":
     test_webapp_endpoints()
     test_secondary_emotion_path()
     test_intensity_display()
+    test_dark_mode_enforced()
     test_adversarial_neutral_sentences_rejected_by_matcher()
     test_adversarial_core_emotion_vocabulary()
     test_adversarial_negation_handling()
     test_adversarial_high_confidence_spanish()
     test_adversarial_secondary_emotion_sanity()
-    print("All tests (12 Baseline + 5 Adversarial Verification Suites = 17 Suites) passed successfully!")
+    print("All tests passed successfully!")
+
