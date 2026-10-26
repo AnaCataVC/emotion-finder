@@ -12,8 +12,8 @@ Usage:
 import hashlib
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
-import uuid
+from typing import Any
+
 from fasthtml.common import *
 
 from decision_tree import QUADRANTS, get_node, get_quadrant_emotions, get_tree
@@ -39,7 +39,33 @@ body {
     --brand-gradient: linear-gradient(135deg, #e84393 0%, #7b40d4 50%, #3b38c2 100%);
     --brand-gradient-hover: linear-gradient(135deg, #f054a5 0%, #8c52e6 50%, #4b48d6 100%);
     --brand-glow: rgba(232, 67, 147, 0.25);
-    --card-radius: 22px;
+    --card-border: rgba(123, 64, 212, 0.18);
+    --feedback-border: rgba(123, 64, 212, 0.15);
+
+    /* Radii Tokens */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-card: 22px;
+    --radius-full: 9999px;
+    --card-radius: var(--radius-card);
+
+    /* Russell Quadrant Tokens */
+    --q-alta-pos-text: #e84393;
+    --q-alta-pos-bg: linear-gradient(135deg, rgba(255, 154, 68, 0.2), rgba(232, 67, 147, 0.2));
+    --q-alta-pos-border: rgba(232, 67, 147, 0.35);
+
+    --q-alta-neg-text: #ff416c;
+    --q-alta-neg-bg: linear-gradient(135deg, rgba(255, 65, 108, 0.2), rgba(138, 35, 135, 0.2));
+    --q-alta-neg-border: rgba(255, 65, 108, 0.35);
+
+    --q-baja-pos-text: #00b4db;
+    --q-baja-pos-bg: linear-gradient(135deg, rgba(0, 180, 219, 0.2), rgba(108, 92, 231, 0.2));
+    --q-baja-pos-border: rgba(0, 180, 219, 0.35);
+
+    --q-baja-neg-text: #7d8fa9;
+    --q-baja-neg-bg: linear-gradient(135deg, rgba(83, 105, 118, 0.2), rgba(41, 46, 73, 0.2));
+    --q-baja-neg-border: rgba(125, 143, 169, 0.35);
 }
 
 /* Base Body & Container Adjustments */
@@ -51,7 +77,7 @@ body > header.container {
 /* Glassmorphic Brand Cards */
 article.brand-card {
     border-radius: var(--card-radius);
-    border: 1px solid rgba(123, 64, 212, 0.18);
+    border: 1px solid var(--card-border);
     box-shadow: 0 16px 40px -12px rgba(59, 56, 194, 0.12), 0 4px 16px -2px rgba(232, 67, 147, 0.08);
     backdrop-filter: blur(12px);
     transition: transform 0.25s ease, box-shadow 0.25s ease;
@@ -223,6 +249,25 @@ a[role="button"].btn-outline:hover {
     transform: translateY(-2px);
 }
 
+/* Focus-Visible Accessibility Ring */
+button.btn-gradient:focus-visible,
+a[role="button"].btn-gradient:focus-visible,
+button.btn-outline:focus-visible,
+a[role="button"].btn-outline:focus-visible,
+.lang-switcher a.lang-pill:focus-visible {
+    outline: 2px solid var(--brand-magenta) !important;
+    outline-offset: 3px !important;
+}
+
+/* Disabled States */
+button.btn-gradient:disabled,
+button.btn-outline:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+    box-shadow: none !important;
+}
+
 /* Smooth HTMX Swaps */
 .htmx-swapping { opacity: 0; transform: scale(0.98); transition: all 0.25s ease-out; }
 .htmx-settling { opacity: 1; transform: scale(1); transition: all 0.25s ease-in; }
@@ -306,27 +351,27 @@ a[role="button"].btn-outline:hover {
 }
 
 .q-alta_positiva {
-    background: linear-gradient(135deg, rgba(255, 154, 68, 0.2), rgba(232, 67, 147, 0.2));
-    color: #e84393;
-    border: 1px solid rgba(232, 67, 147, 0.35);
+    background: var(--q-alta-pos-bg);
+    color: var(--q-alta-pos-text);
+    border: 1px solid var(--q-alta-pos-border);
 }
 
 .q-alta_negativa {
-    background: linear-gradient(135deg, rgba(255, 65, 108, 0.2), rgba(138, 35, 135, 0.2));
-    color: #ff416c;
-    border: 1px solid rgba(255, 65, 108, 0.35);
+    background: var(--q-alta-neg-bg);
+    color: var(--q-alta-neg-text);
+    border: 1px solid var(--q-alta-neg-border);
 }
 
 .q-baja_positiva {
-    background: linear-gradient(135deg, rgba(0, 180, 219, 0.2), rgba(108, 92, 231, 0.2));
-    color: #00b4db;
-    border: 1px solid rgba(0, 180, 219, 0.35);
+    background: var(--q-baja-pos-bg);
+    color: var(--q-baja-pos-text);
+    border: 1px solid var(--q-baja-pos-border);
 }
 
 .q-baja_negativa {
-    background: linear-gradient(135deg, rgba(83, 105, 118, 0.2), rgba(41, 46, 73, 0.2));
-    color: #7d8fa9;
-    border: 1px solid rgba(125, 143, 169, 0.35);
+    background: var(--q-baja-neg-bg);
+    color: var(--q-baja-neg-text);
+    border: 1px solid var(--q-baja-neg-border);
 }
 
 /* Final Emotion Result */
@@ -372,6 +417,26 @@ a[role="button"].btn-outline:hover {
     color: var(--brand-violet);
     font-weight: 600;
 }
+
+/* Feedback & Form Components */
+.feedback-container {
+    margin-top: 2rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--feedback-border);
+}
+
+.feedback-thanks {
+    color: var(--brand-violet);
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin: 0.5rem 0;
+}
+
+.form-textarea {
+    border-radius: var(--radius-lg);
+    font-size: 1.05rem;
+    padding: 1rem;
+}
 """
 
 # ---------------------------------------------------------------------------
@@ -399,7 +464,6 @@ app, rt = fast_app(
 )
 
 # Explicit top-level aliases for Vercel ASGI serverless function AST detection
-app = app
 application = app
 handler = app
 
@@ -550,13 +614,19 @@ def _page_shell(content, lang: str = "es"):
                                 "ES",
                                 href="/?lang=es",
                                 cls=f"lang-pill {'active' if lang == 'es' else ''}",
+                                aria_label="Idioma activo: Español" if lang == "es" else "Cambiar idioma a Español",
+                                aria_current="page" if lang == "es" else None,
                             ),
                             A(
                                 "EN",
                                 href="/?lang=en",
                                 cls=f"lang-pill {'active' if lang == 'en' else ''}",
+                                aria_label="Active language: English" if lang == "en" else "Switch language to English",
+                                aria_current="page" if lang == "en" else None,
                             ),
                             cls="lang-switcher",
+                            role="navigation",
+                            aria_label="Language selection" if lang == "en" else "Selección de idioma",
                         )
 
                     ),
@@ -696,7 +766,7 @@ def get(lang: str = "es"):
                     placeholder=t("placeholder", lang),
                     required=True,
                     rows=3,
-                    style="border-radius: 16px; font-size: 1.05rem; padding: 1rem;",
+                    cls="form-textarea",
                     onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); this.form.requestSubmit(); }",
                 ),
                 Input(type="hidden", name="lang", value=lang),
@@ -775,7 +845,7 @@ def _render_feedback_widget(user_text: str, lang: str, quadrant: str, emotion: s
             style="font-size: 0.8rem; color: var(--pico-muted-color); margin-top: 0.5rem; text-align: center;",
         ),
         id="feedback-container",
-        style="margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid rgba(123, 64, 212, 0.15);",
+        cls="feedback-container",
     )
 
 
@@ -812,7 +882,10 @@ def _render_emotion_result(node: dict, quadrant: str, lang: str,
         Div(
             Span(quadrant_label, cls=f"quadrant-badge q-{quadrant}"),
             *((intensity_badge,) if intensity_badge else ()),
-            Div(emoji, cls="emotion-emoji-giant"),
+            Div(
+                Span(emoji, role="img", aria_label=f"{quadrant_label}: {emotion_name}"),
+                cls="emotion-emoji-giant",
+            ),
             P(t(heading_key, lang), style="color: var(--pico-muted-color); font-size: 0.95rem; margin-bottom: 0.25rem;"),
             H2(emotion_name, cls="emotion-title-final"),
             P(description, cls="emotion-desc-final"),
@@ -991,7 +1064,7 @@ def _normalize_lang(lang: str) -> str:
     return lang if lang in ("es", "en") else "es"
 
 
-def _session_hash(session: Any = None, req: Request = None) -> Optional[str]:
+def _session_hash(session: Any = None, req: Request = None) -> str | None:
     """Anonymous, privacy-safe session hash for feedback deduplication and rate limiting.
     Anchored strictly to client network identity (IP + User-Agent) so automated scripts
     or bots cannot evade the rate limit by omitting, rotating, or wiping session cookies.
@@ -1017,7 +1090,7 @@ def _feedback_thanks(lang: str):
     return Div(
         P(
             f"✨ {t('feedback_thanks', lang)}",
-            style="color: var(--brand-violet); font-weight: 600; font-size: 0.95rem; margin: 0.5rem 0;",
+            cls="feedback-thanks",
         ),
         style="text-align: center;",
     )
@@ -1126,7 +1199,7 @@ def feedback_form_route(user_text: str, lang: str = "es", quadrant: str = "", em
         *optgroups,
         name="corrected_emotion",
         id="corrected-emotion-select",
-        style="border-radius: 12px; margin-bottom: 0.75rem;",
+        style="border-radius: var(--radius-md); margin-bottom: 0.75rem;",
     )
 
     quad_radios = [
@@ -1141,7 +1214,7 @@ def feedback_form_route(user_text: str, lang: str = "es", quadrant: str = "", em
     return Div(
         Form(
             # Honeypot field (anti-bot)
-            Input(type="text", name="hp_confirm", style="display:none !important;", tabindex="-1", autocomplete="off"),
+            Input(type="text", name="hp_confirm", style="display:none !important;", tabindex="-1", autocomplete="off", aria_hidden="true"),
             # Context fields
             Input(type="hidden", name="user_text", value=user_text),
             Input(type="hidden", name="lang", value=lang),
@@ -1160,7 +1233,7 @@ def feedback_form_route(user_text: str, lang: str = "es", quadrant: str = "", em
                 name="comments",
                 placeholder=t("feedback_comments_placeholder", lang),
                 maxlength="150",
-                style="border-radius: 12px; font-size: 0.9rem; margin-bottom: 1rem;",
+                style="border-radius: var(--radius-md); font-size: 0.9rem; margin-bottom: 1rem;",
             ),
 
             Div(
@@ -1192,7 +1265,7 @@ def feedback_form_route(user_text: str, lang: str = "es", quadrant: str = "", em
             style="max-width: 520px; margin: 0 auto; text-align: center;",
         ),
         id="feedback-container",
-        style="margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid rgba(123, 64, 212, 0.15);",
+        cls="feedback-container",
     )
 
 
