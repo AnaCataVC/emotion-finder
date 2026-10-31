@@ -414,6 +414,70 @@ def test_retrain_pipeline_dry_run():
     assert success is True
 
 
+def test_retrain_pipeline_skips_write_when_no_new_feedback(monkeypatch):
+    """Verify that retrain_language does not overwrite .joblib files when no new feedback exists."""
+    import scripts.retrain_from_feedback as rff
+
+    dump_calls = []
+    monkeypatch.setattr(rff.joblib, "dump", lambda *args, **kwargs: dump_calls.append(args))
+
+    store = LocalSQLiteFeedbackStore(":memory:")
+    # Existing record is already 'incorporated' (no new 'verified' records)
+    old_rec = create_feedback_record(
+        user_text="me siento lleno de energia y entusiasmo hoy",
+        detected_lang="es",
+        predicted_quadrant="alta_positiva",
+        predicted_emotion="Entusiasmo",
+        model_confidence=0.95,
+        rating="positive",
+        status="incorporated",
+    )
+    store.save(old_rec)
+
+    success = retrain_language("es", store, dry_run=False)
+    assert success is True
+    assert len(dump_calls) == 0
+
+
+def test_retrain_pipeline_cumulative_incorporated_and_verified(monkeypatch):
+    """Verify that retrain_language includes previously incorporated records alongside new verified ones."""
+    import scripts.retrain_from_feedback as rff
+
+    dump_calls = []
+    monkeypatch.setattr(rff.joblib, "dump", lambda *args, **kwargs: dump_calls.append(args))
+
+    store = LocalSQLiteFeedbackStore(":memory:")
+    inc_rec = create_feedback_record(
+        user_text="estoy saltando de alegria y felicidad pura",
+        detected_lang="es",
+        predicted_quadrant="alta_positiva",
+        predicted_emotion="Alegría",
+        model_confidence=0.95,
+        rating="positive",
+        status="incorporated",
+    )
+    new_rec = create_feedback_record(
+        user_text="siento una calma profunda y serenidad total",
+        detected_lang="es",
+        predicted_quadrant="baja_positiva",
+        predicted_emotion="Serenidad",
+        model_confidence=0.96,
+        rating="positive",
+        status="verified",
+    )
+    store.save(inc_rec)
+    store.save(new_rec)
+
+    success = retrain_language("es", store, dry_run=False)
+    assert success is True
+    assert len(dump_calls) == 1
+    # Both records must now have status 'incorporated'
+    incorporated_ids = {r.id for r in store.get_by_status("incorporated")}
+    assert inc_rec.id in incorporated_ids
+    assert new_rec.id in incorporated_ids
+    assert len(store.get_by_status("verified")) == 0
+
+
 def test_feedback_rate_limit_without_cookies(test_client):
     """Clients omitting or clearing cookies (simulating bots) are still rate-limited via network anchor."""
     from main import FEEDBACK_RATE_LIMIT_MAX
@@ -450,7 +514,6 @@ def test_feedback_rate_limit_without_cookies(test_client):
 
 def test_tree_route_rate_limit_and_quadrant_validation(test_client):
     """POST /tree validates quadrant keys and applies silent rate limiting on negative rejection feedback."""
-    from main import FEEDBACK_RATE_LIMIT_MAX
 
     store = get_feedback_store()
 

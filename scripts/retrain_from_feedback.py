@@ -106,15 +106,27 @@ def retrain_language(lang: str, store: FeedbackStore, dry_run: bool = False, inc
     base_count = len(base_texts)
     logger.info("Loaded %d canonical samples from %s", base_count, csv_name)
 
-    # 2. Ingest feedback records
-    records = store.get_by_status("verified", limit=500)
+    # 2. Ingest feedback records (newly verified + previously incorporated cumulative history)
+    new_records = store.get_by_status("verified", limit=500)
     if include_pending:
         pending = store.get_by_status("pending", limit=500)
-        known_ids = {r.id for r in records}
-        records += [r for r in pending if r.id not in known_ids]
+        known_new_ids = {r.id for r in new_records}
+        new_records += [r for r in pending if r.id not in known_new_ids]
 
-    feedback_samples = extract_training_samples(records, lang)
-    logger.info("Found %d valid feedback samples for '%s'", len(feedback_samples), lang)
+    incorporated_records = store.get_by_status("incorporated", limit=500)
+    already_incorporated_ids = {r.id for r in incorporated_records}
+    known_ids = {r.id for r in new_records}
+    all_records = new_records + [r for r in incorporated_records if r.id not in known_ids]
+
+    new_samples = extract_training_samples(new_records, lang)
+    feedback_samples = extract_training_samples(all_records, lang)
+    logger.info(
+        "Found %d total valid feedback samples for '%s' (%d new, %d previously incorporated)",
+        len(feedback_samples),
+        lang,
+        len(new_samples),
+        len(feedback_samples) - len(new_samples),
+    )
 
     # Enforce 10% sample cap
     max_allowed = int(base_count * _MAX_FEEDBACK_RATIO)
@@ -131,11 +143,13 @@ def retrain_language(lang: str, store: FeedbackStore, dry_run: bool = False, inc
         combined_texts = list(base_texts) + list(fb_texts)
         combined_labels = list(base_labels) + list(fb_labels)
         incorporated_ids = set(fb_ids)
+        new_ids_to_mark = incorporated_ids - already_incorporated_ids
         logger.info("Total augmented dataset size: %d samples", len(combined_texts))
     else:
         combined_texts = list(base_texts)
         combined_labels = list(base_labels)
         incorporated_ids = set()
+        new_ids_to_mark = set()
         logger.info("No feedback samples to incorporate. Running regression verification on baseline.")
 
     # 3. Stratified K-Fold Cross-Validation
@@ -173,18 +187,23 @@ def retrain_language(lang: str, store: FeedbackStore, dry_run: bool = False, inc
 
     logger.info("ALL QUALITY GATES PASSED for '%s'!", lang)
 
-    # 6. Save model or dry-run
+    # 6. Save model or dry-run (skip disk write if no new feedback records were incorporated)
     if dry_run:
         logger.info("[DRY-RUN] Model not written to disk. Pipeline verified successfully.")
+    elif not new_ids_to_mark:
+        logger.info(
+            "No new feedback samples to incorporate for '%s'. Skipping model write to avoid binary churn.",
+            lang,
+        )
     else:
         out_path = MODELS_DIR / f"model_{lang}.joblib"
         joblib.dump(candidate_pipeline, out_path, compress=3)
         logger.info("Saved updated model to %s", out_path)
 
-        # Mark ONLY the records that were actually incorporated into this training run
-        for rec_id in incorporated_ids:
+        # Mark ONLY the newly incorporated records in this training run
+        for rec_id in new_ids_to_mark:
             store.mark_status(rec_id, "incorporated")
-        logger.info("Marked %d processed records as 'incorporated'.", len(incorporated_ids))
+        logger.info("Marked %d newly processed records as 'incorporated'.", len(new_ids_to_mark))
 
     return True
 

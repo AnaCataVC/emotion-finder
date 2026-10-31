@@ -32,8 +32,10 @@ To prevent adversarial data poisoning or quality degradation when incorporating 
    - Profanity and spam pattern filtering.
 2. **Consensus & Confidence Gating**:
    - Only samples with verified user consensus or high model disagreement (uncertainty sampling where top-2 probability gap is small) are flagged for retraining pool.
-3. **Regression Probes as Mandatory Gate**:
+3. **Regression Probes & Cumulative Idempotency Gates**:
    - Any retraining batch MUST validate against existing `REGRESSION_PROBES` (dialectal idioms) and maintain $F_1 \ge 0.95$ across the 700 synthetic baseline rows before model artifacts are promoted to production.
+   - **Cumulative Retention (`verified` + `incorporated`)**: `scripts/retrain_from_feedback.py` merges both newly `"verified"` records and previously `"incorporated"` records (prioritizing newer samples within the 10% volume cap) so weekly retraining retains historical adaptations.
+   - **Idempotent No-Op Guard & Deterministic Hashing**: When zero new `"verified"` samples exist for a language, disk serialization (`joblib.dump`) is skipped and `PYTHONHASHSEED=0` is enforced in CI (`.github/workflows/retrain.yml`), preventing binary churn commits and unnecessary serverless redeployments.
 
 ## 4. References & Sources
 - Settles, B. (2009). *Active Learning Literature Survey*. University of Wisconsin-Madison.
