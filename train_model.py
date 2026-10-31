@@ -382,7 +382,7 @@ def train_and_evaluate(lang: str, data_path: Path, model_path: Path) -> None:
 
     # Class distribution
     dist = Counter(labels)
-    print(f"  Class distribution:")
+    print("  Class distribution:")
     for cls, count in sorted(dist.items()):
         print(f"    {cls}: {count} ({count/len(labels)*100:.1f}%)")
 

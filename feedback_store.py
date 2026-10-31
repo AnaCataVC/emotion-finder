@@ -282,7 +282,7 @@ def _decode_hrana_cell(cell: Any) -> Any:
 class TursoHttpFeedbackStore(FeedbackStore):
     """
     Lightweight HTTP client for Turso LibSQL Pipeline API.
-    
+
     Zero third-party library dependencies (uses Python's standard urllib.request).
     Enforces a strict 1.8-second socket timeout to prevent serverless execution freezes.
     """
@@ -380,11 +380,11 @@ class TursoHttpFeedbackStore(FeedbackStore):
             results = res.get("results", [])
             if not results or results[0].get("type") != "ok":
                 return []
-            
+
             exec_res = results[0].get("response", {}).get("result", {})
             cols = [c.get("name") for c in exec_res.get("cols", [])]
             raw_rows = exec_res.get("rows", [])
-            
+
             records = []
             for row in raw_rows:
                 row_vals = [_decode_hrana_cell(cell) for cell in row]

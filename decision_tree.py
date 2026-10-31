@@ -709,10 +709,10 @@ DECISION_TREES: Dict[str, Dict[str, Any]] = {
 
 def get_tree(quadrant: str) -> Optional[dict]:
     '''Returns the decision tree root for a given quadrant.
-    
+
     Args:
         quadrant (str): One of 'alta_positiva', 'alta_negativa', 'baja_negativa', 'baja_positiva'.
-        
+
     Returns:
         Optional[dict]: The root node of the decision tree for that quadrant, or None.
     '''
@@ -722,11 +722,11 @@ def get_tree(quadrant: str) -> Optional[dict]:
 
 def get_node(quadrant: str, path: str) -> Optional[dict]:
     '''Navigate to a specific node in a quadrant's tree.
-    
+
     Args:
         quadrant (str): The quadrant name.
         path (str): Dot-separated path like 'yes.no.yes.no'. Empty string means root.
-        
+
     Returns:
         Optional[dict]: The node at the specified path, or None if not found.
     '''
@@ -735,7 +735,7 @@ def get_node(quadrant: str, path: str) -> Optional[dict]:
         return None
     if not path:
         return node
-        
+
     steps = path.split('.')
     for step in steps:
         if isinstance(node, dict) and step in node:
@@ -749,24 +749,24 @@ def _extract_emotions(node: dict) -> List[dict]:
     '''Helper to extract all leaf (emotion) nodes from a given tree node.'''
     if not node:
         return []
-    
+
     # If it's a leaf node
     if 'emotion_es' in node:
         return [node]
-        
+
     # If it's a question node, recurse
     emotions = []
     if 'yes' in node:
         emotions.extend(_extract_emotions(node['yes']))
     if 'no' in node:
         emotions.extend(_extract_emotions(node['no']))
-        
+
     return emotions
 
 
 def get_all_emotions() -> list[dict]:
     '''Returns flat list of all 64 emotions with their metadata.
-    
+
     Returns:
         list[dict]: List of all leaf emotion nodes across all quadrants.
     '''
@@ -778,10 +778,10 @@ def get_all_emotions() -> list[dict]:
 
 def get_quadrant_emotions(quadrant: str) -> list[dict]:
     '''Returns the 16 emotions for a specific quadrant.
-    
+
     Args:
         quadrant (str): The quadrant name.
-        
+
     Returns:
         list[dict]: List of 16 emotion dicts for that quadrant.
     '''

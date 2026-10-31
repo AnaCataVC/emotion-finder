@@ -65,7 +65,7 @@ def _init_cache() -> None:
         for lang in langs:
             name_key, desc_key = f"emotion_{lang}", f"description_{lang}"
             profiles = [f"{e.get(name_key, '')} {e.get(desc_key, '')}" for e in emotions]
-            
+
             vec = TfidfVectorizer(
                 stop_words=_STOPWORDS.get(lang, "english"),
                 sublinear_tf=True,

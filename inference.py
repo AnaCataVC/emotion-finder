@@ -14,7 +14,7 @@ from pathlib import Path
 import joblib
 
 # Import preprocessing so unpickler resolves tokenize_es and tokenize_en
-import preprocessing
+import preprocessing  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # Global model loading (cold-start caching for serverless)
