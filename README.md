@@ -109,7 +109,8 @@ To establish rigorous experimental evidence rather than relying solely on in-dis
 | **Semantic Emotion Matcher** | `emotion_matcher.py` | Precomputed TF-IDF cosine similarity against 16 emotion definitions per quadrant; zero-overlap gating (`nnz == 0`) and thresholding (`>= 0.35`). |
 | **Somatic Decision Tree** | `decision_tree.py` | Balanced binary tree of depth 4 ($2^4 = 16$ leaves per quadrant, 64 total emotions) mapping physical sensations to affective clarity. |
 | **Feedback Storage Layer** | `feedback_store.py` | Decoupled storage supporting `LocalSQLiteFeedbackStore`, `TursoHttpFeedbackStore` (HTTP pipeline with zero extra dependencies), and fail-open `NullFeedbackStore`. |
-| **Active Learning Pipeline** | `scripts/retrain_from_feedback.py` | Batch retraining with 10% volume safety cap, text length filters, 5-fold CV gate ($F_1 \ge 0.95$), and 100% regression probe gate. |
+| **Active Learning Pipeline** | `scripts/retrain_from_feedback.py` | Cumulative batch retraining (`verified` + `incorporated` history) with 10% volume safety cap, idempotent no-op skip on empty diffs, 5-fold CV gate ($F_1 \ge 0.95$), and 100% regression probe gate. |
+| **Unified Pipeline Task Runner** | `scripts/rebuild_pipeline.py` | Orchestrates dataset generation, baseline model training, empirical benchmarking, Ruff static analysis, and Pytest execution with deterministic `PYTHONHASHSEED=0`. |
 | **CLI Curation Review Tool** | `scripts/curate_feedback.py` | Single-keystroke maintainer tool to review pending user corrections (`[v]erify`, `[r]eject`, `[s]kip`). |
 | **Hypermedia UI & ASGI App** | `main.py` | FastHTML + HTMX server-rendered reactive components; network-anchored rate limiting on feedback endpoints. |
 
@@ -148,6 +149,8 @@ pip install -r requirements-dev.txt
 Verify ML pipelines, dialectal mappings, decision trees, HTMX endpoints, and evaluation integrity:
 ```powershell
 pytest -v
+python scripts/rebuild_pipeline.py --check-only
+git config core.hooksPath .githooks
 ```
 *(Verify that the full automated test suite passes with 100% success / zero regressions).*
 
@@ -155,6 +158,8 @@ pytest -v
 Reproduce the benchmark comparison tables and generate confusion matrix figures:
 ```powershell
 python scripts/evaluate_models.py
+# Or rebuild the full pipeline (datasets + models + benchmarks + lint + tests):
+python scripts/rebuild_pipeline.py
 ```
 
 ### 4. Interactive Feedback Curation & Retraining

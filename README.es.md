@@ -109,7 +109,8 @@ Para proporcionar evidencia experimental rigurosa y reproducible en lugar de lim
 | **Matcher Semántico de Emoción** | `emotion_matcher.py` | Similitud coseno TF-IDF precomputada contra 16 definiciones de emoción por cuadrante; filtro de solapamiento nulo (`nnz == 0`) y umbral (`>= 0.35`). |
 | **Árbol de Decisión Somático** | `decision_tree.py` | Árbol binario balanceado de profundidad 4 ($2^4 = 16$ hojas por cuadrante, 64 emociones en total) que mapea sensaciones viscerales con determinismo. |
 | **Capa de Almacenamiento de Feedback** | `feedback_store.py` | Repositorio desacoplado que soporta `LocalSQLiteFeedbackStore`, `TursoHttpFeedbackStore` (pipeline HTTP sin dependencias adicionales) y `NullFeedbackStore` (fail-open). |
-| **Pipeline de Active Learning** | `scripts/retrain_from_feedback.py` | Reentrenamiento por lotes con tope de seguridad del 10%, filtros de longitud de texto, compuerta de CV 5-Fold ($F_1 \ge 0.95$) y 100% en sondas de regresión. |
+| **Pipeline de Active Learning** | `scripts/retrain_from_feedback.py` | Reentrenamiento acumulativo por lotes (`verified` + historial `incorporated`) con tope de seguridad del 10%, omisión idempotente sin cambios nuevos, compuerta CV 5-Fold ($F_1 \ge 0.95$) y 100% en sondas de regresión. |
+| **Orquestador Unificado del Pipeline** | `scripts/rebuild_pipeline.py` | Ejecuta generación de datasets, entrenamiento base, evaluación empírica, análisis estático Ruff y suite Pytest con `PYTHONHASHSEED=0` determinista. |
 | **Herramienta CLI de Curación** | `scripts/curate_feedback.py` | Utilidad de terminal para que los mantenedores auditen sugerencias pendientes con una sola tecla (`[v]erificar`, `[r]echazar`, `[s]altar`). |
 | **UI Hypermedia y Servidor ASGI** | `main.py` | Componentes reactivos renderizados en el servidor con FastHTML + HTMX; rate limiting por identidad de red en endpoints de feedback. |
 
@@ -148,6 +149,8 @@ pip install -r requirements-dev.txt
 Verificar pipelines de ML, mapeos dialectales, árboles de decisión, endpoints HTMX e integridad de evaluación:
 ```powershell
 pytest -v
+python scripts/rebuild_pipeline.py --check-only
+git config core.hooksPath .githooks
 ```
 *(Verificar que la suite completa de pruebas automatizadas pase con 100% de éxito / cero regresiones).*
 
@@ -155,6 +158,8 @@ pytest -v
 Reproducir las tablas comparativas y generar las figuras de matriz de confusión:
 ```powershell
 python scripts/evaluate_models.py
+# O reconstruir el pipeline completo (datasets + modelos + benchmarks + lint + tests):
+python scripts/rebuild_pipeline.py
 ```
 
 ### 4. Curación Interactiva de Feedback y Reentrenamiento
