@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+set -e
+
+echo "[pre-push] Running Ruff linter & Pytest quality gate..."
+if [ -x ".venv/Scripts/python.exe" ]; then
+    PYTHON_BIN=".venv/Scripts/python.exe"
+elif [ -x ".venv/bin/python" ]; then
+    PYTHON_BIN=".venv/bin/python"
+else
+    PYTHON_BIN="python"
+fi
+
+PYTHONHASHSEED=0 "$PYTHON_BIN" -m ruff check .
+PYTHONHASHSEED=0 "$PYTHON_BIN" -m pytest -q
+echo "[pre-push] All quality gates passed."
